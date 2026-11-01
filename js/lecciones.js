@@ -165,7 +165,7 @@ const LESSONS = [
 ];
 const SOON=[
  ["Autos","VehicleBody3D: ruedas, aceleración y freno de mano."],["Aviones","Empuje, sustentación, alabeo y cabeceo."],
- ["Tanques","Orugas, torreta que gira aparte y cañón."],["Misiones","Objetivos, puntos de control y misiones con vehículos."]];
+ ["Tanques","Orugas, torreta que gira aparte y cañón."]];
 
 /* =================== curso GDScript desde 0 =================== */
 const JUGADOR_GD = `extends CharacterBody3D
@@ -567,7 +567,7 @@ function buildFPLab(def,p,readout){
     const t=new T.Mesh(new T.BoxGeometry(s*2+.04,.08,s*2+.04),edge);t.position.set(x,h,z);scene.add(t)});
   const tgt=new T.Mesh(new T.CylinderGeometry(.6,.6,.1,24),new T.MeshStandardMaterial({color:0xe85a50}));tgt.rotation.x=Math.PI/2;tgt.position.set(0,1.6,-19.6);scene.add(tgt);
   const pl={x:0,z:2,y:0,vy:0,yaw:0,pitch:0,head:1.6};
-  const lab={scene,cam,keys:!!def.keys,rebuild(){},tick(){}};
+  const lab={scene,cam,keys:!!def.keys,rebuild(){},tick(){},pl};
   let drag=null;
   lab.bind=el=>{el.style.touchAction="none";el.style.cursor="grab";
     el.addEventListener("pointerdown",e=>{drag={x:e.clientX,y:e.clientY};try{el.setPointerCapture(e.pointerId)}catch(_){}});
@@ -882,15 +882,18 @@ function buildRangeLab(def,p,readout){
   const auto=()=>mode==="cadencia"?p.b>=.5:mode==="retroceso";
   const cooldown=()=>mode==="cadencia"?p.t:mode==="retroceso"?0.1:0.12;
   const usesAmmo=mode==="municion";
+  const MS={k:0,t:0,state:"activa",start:false,log:"Misión iniciada."};
+  const msReset=()=>{MS.k=0;MS.t=p.s;MS.state="activa";MS.log="Misión reiniciada.";TG.forEach(t=>{t.vida=100;t.down=false;t.timer=0})};
   let hud=null;
-  const lab={scene,cam,keys:!!def.keys,tick(){},rebuild(){if(usesAmmo&&!A.started){A.ammo=Math.round(p.m);A.started=true}}};
+  const lab={scene,cam,keys:!!def.keys,tick(){},rebuild(){if(usesAmmo&&!A.started){A.ammo=Math.round(p.m);A.started=true}if(mode==="mision"&&!MS.start){MS.t=p.s;MS.start=true}}};
   lab.bind=el=>{el.style.touchAction="none";el.style.cursor="crosshair";
-    hud=document.createElement("div");hud.className="hud";hud.innerHTML=`<div class="cross"></div>${usesAmmo?'<div class="ammo"></div>':""}<div class="hudmsg"></div>`;el.appendChild(hud);
+    hud=document.createElement("div");hud.className="hud";hud.innerHTML=`<div class="cross"></div>${usesAmmo?'<div class="ammo"></div>':""}${mode==="mision"?'<div class="obj"></div><div class="banner"></div>':""}<div class="hudmsg"></div>`;el.appendChild(hud);
     const aim=e=>{const b=el.getBoundingClientRect();const nx=(e.clientX-b.left)/b.width*2-1,ny=(e.clientY-b.top)/b.height*2-1;A.ty=-nx*.55;A.tp=-ny*.32};
     el.addEventListener("pointermove",aim);
     el.addEventListener("pointerdown",e=>{aim(e);A.down=true;A.pressed=true;try{el.setPointerCapture(e.pointerId)}catch(_){}});
     ["pointerup","pointercancel"].forEach(ev=>el.addEventListener(ev,()=>A.down=false))};
   function shoot(){
+    if(mode==="mision"&&MS.state!=="activa")return;
     if(usesAmmo){if(A.reloading)return;if(A.ammo<=0){A.last="Clic vacío: el cargador está en 0. Apretá R para recargar.";blip(900);A.can=false;A.cd=.25;return}A.ammo--}
     A.shots++;A.can=false;A.cd=cooldown();A.flashT=.05;flash.visible=true;flashL.intensity=2.5;
     A.kick+=mode==="retroceso"?p.k:.012;blip(110);
@@ -903,13 +906,16 @@ function buildRangeLab(def,p,readout){
     marks.push(m);if(marks.length>40){const o=marks.shift();o.parent&&o.parent.remove(o)}
     const P=`(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)}, ${pt.z.toFixed(1)})`;
     if(t&&!t.down){const dmg=mode==="tiro"?p.d:34;t.vida-=dmg;hud&&hud.classList.add("hitm");setTimeout(()=>hud&&hud.classList.remove("hitm"),90);
-      if(t.vida<=0){t.down=true;t.timer=2.5}
+      if(t.vida<=0){t.down=true;t.timer=mode==="mision"?4:2.5;
+        if(mode==="mision"){MS.k++;MS.log=`destruida.emit() → derribadas = ${MS.k}`;if(MS.k>=Math.round(p.n)){MS.state="cumplida";MS.log="Temporizador.stop() → completar_objetivo()";blip(1200)}}}
       A.last=`get_collider() = ${t.name}   distancia = ${h.distance.toFixed(1)} m\nget_collision_point() = ${P}\nrecibir_danio(${dmg}) → vida = ${Math.max(0,t.vida)}${t.vida<=0?"  ¡derribada!":""}`}
     else A.last=`get_collider() = ${t?t.name+" (caída)":"Pared"}   distancia = ${h.distance.toFixed(1)} m\nget_collision_point() = ${P}\nhas_method("recibir_danio") = false`;
   }
   lab.tick=dt=>{
     A.yaw+=(A.ty-A.yaw)*Math.min(1,dt*10);A.pitch+=(A.tp-A.pitch)*Math.min(1,dt*10);
     if(!A.can){A.cd-=dt;if(A.cd<=0)A.can=true}
+    if(mode==="mision"){if(MS.state!=="activa"){if(A.pressed){A.pressed=false;msReset()}}
+      else{MS.t-=dt;if(MS.t<=0){MS.t=0;MS.state="fallida";MS.log="timeout → fallar_mision()";blip(160)}}}
     const want=auto()?A.down:A.pressed;A.pressed=false;
     if(want&&A.can)shoot();
     if(usesAmmo){const r=KEYS.has("KeyR");if(r&&!A.rPrev&&!A.reloading&&A.res>0&&A.ammo<Math.round(p.m)){A.reloading=true;A.rt=p.r;blip(300)}A.rPrev=r;
@@ -923,7 +929,14 @@ function buildRangeLab(def,p,readout){
       t.g.rotation.x=-Math.PI/2*t.fall});
     if(hud){const am=hud.querySelector(".ammo");if(am)am.innerHTML=`${A.ammo}<small> / ${A.res}</small>`;
       hud.querySelector(".hudmsg").textContent=usesAmmo&&A.reloading?"Recargando…":usesAmmo&&A.ammo===0?(A.res>0?"Sin balas: R para recargar":"Sin munición"):""}
-    if(mode==="tiro")readout(A.last);
+    if(mode==="mision"&&hud){const n=Math.round(p.n);
+      hud.querySelector(".obj").innerHTML=MS.state==="activa"?`<b>Derribá ${n} dianas</b>${MS.k} / ${n}<small>${Math.ceil(MS.t)} s</small>`:"";
+      const bn=hud.querySelector(".banner");bn.textContent=MS.state==="cumplida"?"MISIÓN CUMPLIDA":MS.state==="fallida"?"MISIÓN FALLIDA":"";
+      bn.classList.toggle("on",MS.state!=="activa");bn.classList.toggle("bad",MS.state==="fallida");
+      hud.querySelector(".hudmsg").textContent=MS.state!=="activa"?"Clic para volver a intentar":""}
+    if(mode==="mision")readout(`derribadas = ${MS.k}   dianas_objetivo = ${Math.round(p.n)}   tiempo restante = ${MS.t.toFixed(1)} s
+${MS.log}`);
+    else if(mode==="tiro")readout(A.last);
     else if(mode==="cadencia")readout(`automatico = ${p.b>=.5}   puede_disparar = ${A.can}\nmáximo ${(1/p.t).toFixed(1)} disparos por segundo   disparos: ${A.shots}`);
     else if(mode==="municion")readout(`en_cargador = ${A.ammo}   reserva = ${A.res}   recargando = ${A.reloading}${A.reloading?`  (faltan ${Math.max(0,A.rt).toFixed(1)} s)`:""}\n${A.last.startsWith("Clic")?A.last:"disparos: "+A.shots}`);
     else readout(`patada = ${A.kick.toFixed(3)} rad  (${(A.kick*180/Math.PI).toFixed(1)}°)\ncamara.rotation.x = patada`);
@@ -1012,12 +1025,219 @@ const FPS3=[
   {type:"quiz",kicker:"Repaso",q:"Disparás pero el rayo nunca toca nada. ¿Qué revisás primero?",options:["El color del arma","Que el RayCast3D esté habilitado, que su target_position apunte a -Z y que los objetivos tengan CollisionShape3D","La música","El nombre del proyecto"],answer:1,explain:"Son las tres causas más comunes. Activá Depurar → Formas de colisión visibles para ver las colisiones mientras jugás."}
  ]}
 ];
+/* =================== curso FPS 3D · Unidad 4: misiones =================== */
+const GESTOR_GD = `extends Node
+# Autoload: Proyecto → Configuración del proyecto → Globales → GestorMisiones
+
+signal objetivo_cambiado(texto)
+signal mision_completada
+signal mision_fallada
+
+var objetivos := [
+	"Llegá al punto A",
+	"Llegá al punto B",
+	"Volvé a la base",
+]
+var actual := 0
+
+func objetivo_actual() -> String:
+	return objetivos[actual]
+
+func completar_objetivo():
+	actual += 1
+	if actual >= objetivos.size():
+		mision_completada.emit()
+	else:
+		objetivo_cambiado.emit(objetivos[actual])
+
+func fallar_mision():
+	mision_fallada.emit()`;
+
+const HUD_MISION_GD = `extends CanvasLayer
+
+@onready var texto: Label = $Objetivo
+@onready var cartel: Label = $Cartel
+
+func _ready():
+	texto.text = GestorMisiones.objetivo_actual()
+	GestorMisiones.objetivo_cambiado.connect(_on_objetivo_cambiado)
+	GestorMisiones.mision_completada.connect(func(): mostrar_cartel("MISIÓN CUMPLIDA"))
+	GestorMisiones.mision_fallada.connect(func(): mostrar_cartel("MISIÓN FALLIDA"))
+
+func _on_objetivo_cambiado(nuevo: String):
+	texto.text = nuevo
+
+func mostrar_cartel(mensaje: String):
+	cartel.text = mensaje
+	cartel.modulate.a = 0.0
+	cartel.show()
+	var tween := create_tween()
+	tween.tween_property(cartel, "modulate:a", 1.0, 0.5)`;
+
+const GUARDAR_GD = `const RUTA := "user://progreso.cfg"
+
+func guardar_mision_completada(id: String):
+	var cfg := ConfigFile.new()
+	cfg.load(RUTA)  # si todavía no existe, arranca vacío
+	cfg.set_value("misiones", id, true)
+	cfg.save(RUTA)
+
+func mision_esta_completada(id: String) -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(RUTA) != OK:
+		return false
+	return cfg.get_value("misiones", id, false)`;
+
+const TREE_NIVEL_MISION = `<span class="t">Nivel1</span> <span class="m">(Node3D)</span>
+├─ <span class="t">Jugador</span> <span class="m">(instancia de jugador.tscn, grupo "jugador")</span>
+├─ <span class="t">ZonaA</span> <span class="m">(Area3D)</span>  <span class="m">← zona.gd</span>
+│  └─ <span class="t">CollisionShape3D</span> <span class="m">(cilindro)</span>
+├─ <span class="t">ZonaB</span> <span class="m">(Area3D)</span>  <span class="m">← zona.gd</span>
+├─ <span class="t">Base</span> <span class="m">(Area3D)</span>  <span class="m">← zona.gd</span>
+└─ <span class="t">HUD</span> <span class="m">(CanvasLayer)</span>  <span class="m">← hud_mision.gd</span>
+   ├─ <span class="t">Objetivo</span> <span class="m">(Label)</span>
+   └─ <span class="t">Cartel</span> <span class="m">(Label, oculto)</span>
+
+<span class="m">Autoload (global):</span> <span class="t">GestorMisiones</span>  <span class="m">← gestor_misiones.gd</span>`;
+
+Object.assign(LABS,{
+ zonas:{code:`extends Area3D
+# zona.gd: va en ZonaA, ZonaB y Base
+
+func _ready():
+	$CollisionShape3D.shape.radius = __r__
+	body_entered.connect(_on_body_entered)
+
+func _on_body_entered(body):
+	if body.is_in_group("jugador"):
+		GestorMisiones.completar_objetivo()
+		queue_free()`,
+  params:{r:{val:2,min:0.5,max:6,step:0.5}},fp:true,move:true,full:true,keys:true,zones:true,
+  pad:[["KeyW","W ↑"],["KeyA","A ←"],["KeyS","S ↓"],["KeyD","D →"],["Space","Saltar"],["ShiftLeft","Correr"]],
+  hint:"WASD para moverte, arrastrá para mirar. Seguí la columna de luz."},
+ eliminar:{code:`extends Node
+# mision_dianas.gd
+
+@export var dianas_objetivo := __n__
+@export var tiempo_limite := __s__
+var derribadas := 0
+
+func _ready():
+	for diana in get_tree().get_nodes_in_group("dianas"):
+		diana.destruida.connect(_on_diana_destruida)
+	$Temporizador.timeout.connect(_on_tiempo_agotado)
+	$Temporizador.start(tiempo_limite)
+
+func _on_diana_destruida():
+	derribadas += 1
+	if derribadas >= dianas_objetivo:
+		$Temporizador.stop()
+		GestorMisiones.completar_objetivo()
+
+func _on_tiempo_agotado():
+	GestorMisiones.fallar_mision()`,
+  params:{n:{val:5,min:1,max:20,step:1},s:{val:20,min:5,max:120,step:1}},range:"mision",
+  hint:"Derribá las dianas antes de que se acabe el tiempo. Clic para disparar."}
+});
+
+function buildZoneLab(def,p,readout){
+  p.v??=6;p.c??=10;p.j??=5;
+  let fp="";const lab=buildFPLab(def,p,t=>fp=t),T=THREE,pl=lab.pl;
+  const Z=[{n:"Punto A",x:9,z:-11,c:0x4f9fe0},{n:"Punto B",x:-11,z:-15,c:0xe3a75b},{n:"Base",x:0,z:4,c:0x41c283}];
+  Z.forEach(z=>{const g=new T.Group();g.position.set(z.x,0,z.z);
+    z.ring=new T.Mesh(new T.CylinderGeometry(1,1,.06,40),new T.MeshBasicMaterial({color:z.c,transparent:true,opacity:.45}));z.ring.position.y=.04;g.add(z.ring);
+    z.col=new T.Mesh(new T.CylinderGeometry(.35,.35,14,16,1,true),new T.MeshBasicMaterial({color:z.c,transparent:true,opacity:.35,side:T.DoubleSide}));z.col.position.y=7;g.add(z.col);
+    lab.scene.add(g);z.g=g});
+  const M={i:0,state:"activa",log:["Misión iniciada. Objetivo 1: Llegá al punto A"],wait:0};
+  let hud=null;const bind0=lab.bind;
+  lab.bind=el=>{bind0(el);hud=document.createElement("div");hud.className="hud";hud.innerHTML='<div class="obj"></div><div class="banner"></div>';el.appendChild(hud)};
+  const t0=lab.tick;
+  lab.tick=dt=>{t0(dt);
+    Z.forEach((z,k)=>{const s=p.r;z.ring.scale.set(s,1,s);const on=k===M.i&&M.state==="activa";z.g.visible=k>=M.i||M.state!=="activa";
+      z.col.material.opacity=on?.35+.15*Math.sin(performance.now()/250):.1;z.ring.material.opacity=on?.5:.15});
+    let d=0;
+    if(M.state==="activa"){const z=Z[M.i];d=Math.hypot(pl.x-z.x,pl.z-z.z);
+      if(d<p.r){blip(880);M.log.unshift(`body_entered(Jugador) en ${z.n} → completar_objetivo()`);M.i++;
+        if(M.i>=Z.length){M.state="cumplida";M.wait=4;M.log.unshift("mision_completada.emit()");blip(1200)}
+        else M.log.unshift(`objetivo_cambiado.emit("${M.i===1?"Llegá al punto B":"Volvé a la base"}")`)}}
+    else{M.wait-=dt;if(M.wait<=0){M.i=0;M.state="activa";M.log=["Misión reiniciada."];Z.forEach(z=>z.g.visible=true)}}
+    M.log.length=Math.min(M.log.length,4);
+    if(hud){const txt=["Llegá al punto A","Llegá al punto B","Volvé a la base"][Math.min(M.i,2)];
+      hud.querySelector(".obj").innerHTML=M.state==="activa"?`<b>Objetivo ${M.i+1}/3</b>${txt}<small>${d.toFixed(1)} m</small>`:"";
+      const bn=hud.querySelector(".banner");bn.textContent=M.state==="cumplida"?"MISIÓN CUMPLIDA":"";bn.classList.toggle("on",M.state==="cumplida")}
+    readout(`actual = ${Math.min(M.i,3)}   distancia al objetivo = ${d.toFixed(1)} m   radio = ${p.r}\n${M.log.join("\n")}`);
+  };
+  return lab;
+}
+
+const MIS=[
+ {id:"m1",title:"¿Qué es una misión?",sub:"Objetivos, estados y un gestor global",xp:20,steps:[
+  {type:"info",kicker:"Concepto",title:"Una lista de cosas para hacer",html:`<p>Una misión es una <b>lista de objetivos en orden</b>: "llegá al punto A", "derribá 5 enemigos", "volvé a la base". El juego tiene que saber en cuál vas, avisar cuando cumplís uno y decidir si la misión salió bien o mal.</p>
+   <div class="flow"><div>Activa<small>hay un objetivo actual</small></div><b>→</b><div>Objetivo cumplido<small>pasa al siguiente</small></div><b>→</b><div class="hot">Misión cumplida<small>no quedan objetivos</small></div></div>
+   <p>Además puede <b>fallar</b>: se acabó el tiempo, murió un aliado, te descubrieron.</p>
+   <p>Para que todas las escenas sepan en qué misión estás, se usa un <b>Autoload</b>: un script que Godot carga una sola vez, al arrancar el juego, y que queda disponible desde cualquier lado con su nombre. Se crea en <b>Proyecto → Configuración del proyecto → Globales</b>.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve un Autoload como GestorMisiones?",options:["Para que el juego cargue más rápido","Para tener un script único que cualquier escena puede usar, como GestorMisiones.completar_objetivo()","Para dibujar el mapa","Para guardar la música"],answer:1,explain:"Un Autoload vive durante todo el juego y se accede por su nombre desde cualquier script."},
+  {type:"quiz",kicker:"Pregunta",q:"Cambiás de nivel con change_scene_to_file. ¿Qué pasa con el Autoload GestorMisiones?",options:["Se borra con el nivel","Sigue existiendo con sus datos, porque no es parte del nivel","Se duplica","Se reinicia solo"],answer:1,explain:"Los Autoloads están por fuera de la escena actual. Por eso son ideales para cosas que duran entre niveles: misión, puntaje, configuración."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Cuál de estos NO es un objetivo de misión típico?",options:["Llegar a un punto del mapa","Derribar 5 enemigos en 60 segundos","Proteger un vehículo hasta que llegue","Cambiar la resolución de la pantalla"],answer:3,explain:"La resolución es una opción del menú, no un objetivo del juego."}
+ ]},
+ {id:"m2",title:"Zonas con Area3D",sub:"Detectar cuando el jugador llega a un punto",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Un área invisible que avisa",html:`<p>Un <b>Area3D</b> es una zona invisible que no frena a nadie, pero detecta quién entra y quién sale. Emite la señal <code class="i">body_entered(body)</code> cuando un cuerpo entra.</p>
+   <div class="tree">${TREE_NIVEL_MISION}</div>
+   <p>Como también podría entrar un enemigo o una caja, se pregunta si el que entró es el jugador. Para eso el jugador tiene que estar en el grupo <code class="i">"jugador"</code> (Inspector → Nodo → Grupos).</p>
+   <p>Al llegar, la zona le avisa al gestor y se borra con <code class="i">queue_free()</code>, así no se cuenta dos veces.</p>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Patrulla: A, B y vuelta a la base",html:`<p>Caminá hasta cada columna de luz, en orden. Arriba a la izquierda ves el objetivo actual y la distancia. Probá un <b>radio</b> de 0.5: hay que pararse justo encima. Con 6, alcanza con acercarse.</p>`,lab:"zonas"},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué se pregunta body.is_in_group(\"jugador\")?",options:["Porque body_entered solo funciona con grupos","Para que la zona no se cumpla si entra un enemigo, una caja o un vehículo vacío","Para que sea más rápido","No hace falta"],answer:1,explain:"body_entered avisa de cualquier cuerpo. El grupo filtra al que importa."},
+  {type:"fill",kicker:"Completá",q:"Escuchar cuando algo entra en la zona:",code:`func _ready():\n\t____.connect(_on_body_entered)`,options:["body_entered","area_entered","pressed","timeout"],answer:0,explain:"body_entered es para cuerpos físicos, como el jugador. area_entered detecta otras áreas."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué la zona hace queue_free() al cumplirse?",options:["Para liberar memoria de video","Para que no se vuelva a cumplir si el jugador sale y entra de nuevo","Porque Godot lo exige","Para que el jugador salte"],answer:1,explain:"Si la zona siguiera ahí, cada vez que pasás por encima volvería a llamar a completar_objetivo()."}
+ ]},
+ {id:"m3",title:"El gestor de misiones",sub:"Lista de objetivos, índice y señales",xp:25,steps:[
+  {type:"info",kicker:"Código",title:"GestorMisiones",html:`<p>El gestor guarda la lista de objetivos y en cuál vas (<code class="i">actual</code>). Cuando alguien llama a <code class="i">completar_objetivo()</code>, avanza y emite una señal. No toca el HUD ni el nivel directamente: solo avisa, y el que quiera escuchar, escucha.</p><pre class="code">${hl(GESTOR_GD)}</pre>`},
+  {type:"trace",kicker:"Paso a paso",title:"Cumplir los tres objetivos",html:`<p>Mirá cómo avanza <code class="i">actual</code> y qué señal se emite cada vez.</p>`,
+   code:`func completar_objetivo():\n\tactual += 1\n\tif actual >= objetivos.size():\n\t\tmision_completada.emit()\n\telse:\n\t\tobjetivo_cambiado.emit(objetivos[actual])`,
+   steps:[{line:0,say:"El jugador llegó al punto A. La zona llama a completar_objetivo().",vars:{actual:"0","objetivos.size()":"3"}},
+    {line:1,say:"0 + 1 = 1.",vars:{actual:"1"}},{line:2,say:"¿1 es mayor o igual a 3? No."},
+    {line:5,say:"objetivos[1] es \"Llegá al punto B\". El HUD escucha la señal y cambia el texto.",out:"objetivo_cambiado: Llegá al punto B"},
+    {line:0,say:"Llegó al punto B."},{line:1,say:"1 + 1 = 2.",vars:{actual:"2"}},{line:2,say:"¿2 >= 3? No."},
+    {line:5,say:"Siguiente objetivo.",out:"objetivo_cambiado: Volvé a la base"},
+    {line:0,say:"Volvió a la base."},{line:1,say:"2 + 1 = 3.",vars:{actual:"3"}},{line:2,say:"¿3 >= 3? Sí: no quedan objetivos."},
+    {line:3,say:"¡Misión cumplida!",out:"mision_completada"}]},
+  {type:"quiz",kicker:"Pregunta",q:"objetivos tiene 3 elementos. ¿Cuál es el índice del último?",options:["3","2","1","0"],answer:1,explain:"Los índices empiezan en 0: 0, 1 y 2. Por eso cuando actual llega a 3 ya no quedan objetivos."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué el gestor emite señales en vez de cambiar el texto del HUD directamente?",options:["Porque los Autoloads no pueden tocar nodos","Para que el gestor no dependa del HUD: cualquiera puede escuchar (HUD, música, sonidos) y el gestor no se entera","Porque es más rápido","Da igual"],answer:1,explain:"Con señales las piezas quedan separadas. Podés cambiar o sacar el HUD sin tocar el gestor."}
+ ]},
+ {id:"m4",title:"Objetivos con tiempo",sub:"Contar enemigos derribados y fallar con un Timer",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Eliminar antes de que se acabe el tiempo",html:`<p>Otro objetivo clásico: <b>"derribá 5 dianas en 20 segundos"</b>. Se arma con lo que ya sabés:</p>
+   <ul><li>Las dianas están en el grupo <code class="i">"dianas"</code> y emiten <code class="i">destruida</code> al caer (lo viste en la Unidad 3).</li>
+   <li>El script de la misión recorre el grupo con un <code class="i">for</code> y conecta la señal de cada una.</li>
+   <li>Un nodo <code class="i">Timer</code> cuenta el tiempo. Si llega a cero antes de tiempo, emite <code class="i">timeout</code> y la misión falla.</li></ul>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Contra reloj",html:`<p>Derribá las dianas antes de que se acabe el tiempo. Cada una cae con tres tiros. Probá <b>dianas_objetivo</b> 10 con <b>tiempo_limite</b> 10 para ver cómo falla. Hacé clic para volver a empezar.</p>`,lab:"eliminar"},
+  {type:"fill",kicker:"Completá",q:"Arrancar el temporizador con el tiempo límite:",code:`$Temporizador.____(tiempo_limite)`,options:["start","play","run","begin"],answer:0,explain:"Timer.start(segundos) arranca la cuenta. timeout se emite cuando llega a cero."},
+  {type:"quiz",kicker:"Pregunta",q:"Derribás la última diana. ¿Por qué se llama $Temporizador.stop()?",options:["Para que el tiempo siga","Para que el timeout no llegue después y haga fallar una misión que ya cumpliste","Para cerrar el juego","No hace falta"],answer:1,explain:"Si el Timer sigue corriendo, al terminar llamaría a fallar_mision() aunque ya ganaste."}
+ ]},
+ {id:"m5",title:"HUD de misión",sub:"Objetivo en pantalla y cartel con Tween",xp:25,steps:[
+  {type:"info",kicker:"Código",title:"El HUD escucha al gestor",html:`<p>El HUD es un <code class="i">CanvasLayer</code> (como el menú de la Unidad 1) con dos Label: el objetivo actual y un cartel grande, oculto al principio. En <code class="i">_ready()</code> se conecta a las señales del gestor:</p><pre class="code">${hl(HUD_MISION_GD)}</pre>
+   <p><code class="i">func(): mostrar_cartel("…")</code> es una <b>función anónima</b>: una función sin nombre, escrita en el lugar. Sirve cuando la conexión es cortita y no vale la pena crear otra función aparte.</p>
+   <p>El Tween anima <code class="i">modulate:a</code> de 0 a 1, igual que el fundido del menú: el cartel aparece de a poco.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace texto.text = GestorMisiones.objetivo_actual() en _ready()?",options:["Nada","Muestra el primer objetivo apenas aparece el HUD, antes de que llegue cualquier señal","Completa la misión","Borra el texto"],answer:1,explain:"objetivo_cambiado recién se emite cuando cumplís el primero. Sin esta línea, el HUD arrancaría vacío."},
+  {type:"fill",kicker:"Completá",q:"Que el cartel aparezca de a poco en medio segundo:",code:`var tween := create_tween()\ntween.tween_property(cartel, "____", 1.0, 0.5)`,options:["modulate:a","position","text","visible"],answer:0,explain:"modulate:a es la transparencia del nodo: 0 invisible, 1 totalmente visible."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué es func(): mostrar_cartel(\"MISIÓN CUMPLIDA\")?",options:["Un error de sintaxis","Una función anónima: una función sin nombre escrita directamente donde se usa","Un comentario","Una variable"],answer:1,explain:"Las funciones anónimas (lambdas) son prácticas para conexiones cortas de señales."}
+ ]},
+ {id:"m6",title:"Guardar el progreso",sub:"ConfigFile y la carpeta user://",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Que el juego se acuerde",html:`<p>Si el jugador cierra el juego, las variables se pierden. Para recordar qué misiones completó, se guardan en un archivo dentro de <code class="i">user://</code>, una carpeta privada del juego en la computadora del jugador. En Windows queda en <code class="i">%APPDATA%\\Godot\\app_userdata\\TuJuego</code>.</p>
+   <p><code class="i">ConfigFile</code> guarda datos en secciones y claves, como una libreta ordenada:</p><pre class="code">${hl(GUARDAR_GD)}</pre>
+   <p>Así, en el menú de misiones, podés mostrar un tilde verde en las que ya están hechas.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué se guarda en user:// y no en res://?",options:["Porque res:// es más lento","Porque res:// son los archivos del juego y, una vez exportado, son de solo lectura. user:// es donde el juego puede escribir","Porque user:// es más lindo","Da igual"],answer:1,explain:"En el juego exportado no se puede escribir en res://. Partidas y configuraciones van siempre en user://."},
+  {type:"fill",kicker:"Completá",q:"Leer si la misión está completada, con false si no existe el dato:",code:`return cfg.____("misiones", id, false)`,options:["get_value","set_value","load","save"],answer:0,explain:"get_value(sección, clave, por_defecto) devuelve el valor guardado o el valor por defecto."},
+  {type:"quiz",kicker:"Repaso",q:"El jugador llega a la zona pero no pasa nada. ¿Qué revisás?",options:["Que el Area3D tenga CollisionShape3D, que el jugador esté en el grupo \"jugador\" y que la señal esté conectada","El volumen","La sensibilidad del mouse","El color de la zona"],answer:0,explain:"Son las tres causas más comunes. Con Depurar → Formas de colisión visibles ves el área mientras jugás."},
+  {type:"info",kicker:"¡Unidad completa!",title:"Ya tenés misiones",html:`<p>Ya sabés armar misiones con objetivos en orden, zonas, objetivos contra reloj, HUD y guardado. En las próximas unidades vas a sumar vehículos (autos, aviones y tanques) y a usarlos dentro de estas mismas misiones: "llegá a la base en el jeep", "destruí 3 tanques", "aterrizá en la pista".</p>`}
+ ]}
+];
 
 const COURSES={
  cero:{key:"cero",next:"gds",tag:"GDScript · Nivel 0",title:"De 0 en programación",sub:"Lo más básico de lo básico: qué es una instrucción, un script, una función, qué es _ready() y qué es una variable.",lessons:CERO},
  gds:{key:"gds",next:"menu",tag:"GDScript · Nivel 1",title:"GDScript para juegos 3D",sub:"Variables, funciones, movimiento, teclado y física con ejemplos de juegos 3D.",lessons:GDS},
  menu:{key:"menu",next:"fps2",tag:"Curso FPS 3D · Unidad 1",title:"El menú principal",sub:"Menú plano, menú con fondo 3D cinematográfico, opciones y transición al nivel.",lessons:LESSONS},
  fps2:{key:"fps2",next:"fps3",tag:"Curso FPS 3D · Unidad 2",title:"El jugador",sub:"La escena del jugador, Mapa de entrada, mirar con el mouse, caminar, saltar, correr y agacharse.",lessons:FPS2},
- fps3:{key:"fps3",tag:"Curso FPS 3D · Unidad 3",title:"Armas y disparo",sub:"El arma en la escena, disparo con RayCast3D, cadencia, munición, recarga, retroceso y dianas con vida.",lessons:FPS3}
+ fps3:{key:"fps3",next:"mis",tag:"Curso FPS 3D · Unidad 3",title:"Armas y disparo",sub:"El arma en la escena, disparo con RayCast3D, cadencia, munición, recarga, retroceso y dianas con vida.",lessons:FPS3},
+ mis:{key:"mis",tag:"Curso FPS 3D · Unidad 4",title:"Misiones",sub:"Objetivos en orden, zonas con Area3D, gestor de misiones, objetivos contra reloj, HUD y guardado del progreso.",lessons:MIS}
 };
 

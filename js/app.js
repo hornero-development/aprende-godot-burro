@@ -4,6 +4,7 @@ addEventListener("keydown",e=>{if(!S.lab||!S.lab.keys||e.target.closest&&e.targe
   if(e.code==="Space")jumpQ=true;if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code))e.preventDefault()});
 addEventListener("keyup",e=>KEYS.delete(e.code));
 function buildLab(kind,p,readout){
+  if(LABS[kind].zones)return buildZoneLab(LABS[kind],p,readout);
   if(LABS[kind].fp)return buildFPLab(LABS[kind],p,readout);
   if(LABS[kind].range)return buildRangeLab(LABS[kind],p,readout);
   const T=THREE,scene=new T.Scene();scene.background=new T.Color(0x1f2833);
@@ -123,8 +124,8 @@ function mountPreview(host,{mode="3d",openOptions=false,onLog,console:showCon=tr
 
 /* =================== navegación =================== */
 let G=null; // estado del editor
-const NAVOF={cero:"gds",gds:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones"};
-const FPS_COURSES=["menu","fps2","fps3"];
+const NAVOF={cero:"gds",gds:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones",mis:"lecciones"};
+const FPS_COURSES=["menu","fps2","fps3","mis"];
 function nextFPS(){for(const c of FPS_COURSES){const i=COURSES[c].lessons.findIndex(l=>!progress.done.includes(l.id));if(i>=0)return {c,i,all:false}}return {c:"menu",i:0,all:true}}
 function setNav(v){document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===v))}
 function go(v){if(!user){renderWelcome();return}
@@ -247,10 +248,10 @@ function renderGDSChoice(){
 
 function renderLessons(){
   stop3D();setNav("lecciones");location.hash="lecciones";
-  app.innerHTML=`${coursePath("menu")}${coursePath("fps2")}${coursePath("fps3")}
+  app.innerHTML=`${coursePath("menu")}${coursePath("fps2")}${coursePath("fps3")}${coursePath("mis")}
   <section class="unit">
     <div class="unit-head"><span class="tag">Próximas unidades del FPS</span><h2>Del menú al campo de batalla</h2></div>
-    <div class="soon">${SOON.map((s,i)=>`<div class="card"><span class="lock">Unidad ${i+4}</span><b>${s[0]}</b>${s[1]}</div>`).join("")}</div>
+    <div class="soon">${SOON.map((s,i)=>`<div class="card"><span class="lock">Unidad ${i+5}</span><b>${s[0]}</b>${s[1]}</div>`).join("")}</div>
   </section>
   <p class="lead">¿Te cuesta el código de las lecciones? Aprendé GDScript primero en la sección <button class="btn ghost" id="to-gds" style="padding:6px 12px;font-size:14px">GDScript</button></p>`;
   bindPaths();$("#to-gds").onclick=()=>go("gds");

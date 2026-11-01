@@ -363,6 +363,12 @@ pre.code select.pv{background:#1b3248;border:1px solid var(--accent);color:#ffd4
 .labview .hud.hitm .cross::before,.labview .hud.hitm .cross::after{background:#ff4d40}
 .labview .ammo{position:absolute;right:14px;bottom:10px;font-family:var(--f-display);font-weight:700;font-size:28px;color:#fff;text-shadow:0 1px 4px #000;font-variant-numeric:tabular-nums}
 .labview .ammo small{font-size:15px;color:#d5dbe3}
+.labview .obj{position:absolute;left:12px;top:12px;background:rgba(8,12,18,.72);color:#fff;border-left:3px solid var(--burro);border-radius:6px;padding:7px 12px;font-size:14px;font-weight:700;max-width:60%}
+.labview .obj b{display:block;font-family:var(--f-display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--burro)}
+.labview .obj small{display:block;color:#b9c4d1;font-weight:600;font-variant-numeric:tabular-nums}
+.labview .banner{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.9);font-family:var(--f-display);font-weight:700;font-size:clamp(22px,4.5vw,40px);letter-spacing:.08em;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.8);opacity:0;transition:opacity .5s,transform .5s;white-space:nowrap}
+.labview .banner.on{opacity:1;transform:translate(-50%,-50%) scale(1);color:#7ee2a8}
+.labview .banner.on.bad{color:#ff8a80}
 .labview .hudmsg{position:absolute;left:50%;top:62%;transform:translateX(-50%);font-weight:800;color:#fff;text-shadow:0 1px 4px #000;font-size:15px;white-space:nowrap}
 pre.code input.pv{width:7ch;background:#1b3248;border:1px solid var(--accent);color:#ffd479;border-radius:5px;font:inherit;padding:0 4px;text-align:center}
 .labview{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#1f2833;margin-bottom:10px}
