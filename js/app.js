@@ -4,6 +4,7 @@ addEventListener("keydown",e=>{if(!S.lab||!S.lab.keys||e.target.closest&&e.targe
   if(e.code==="Space")jumpQ=true;if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code))e.preventDefault()});
 addEventListener("keyup",e=>KEYS.delete(e.code));
 function buildLab(kind,p,readout){
+  if(LABS[kind].topdown)return buildTopLab(LABS[kind],p,readout);
   if(LABS[kind].fsm)return buildFSMLab(LABS[kind],p,readout);
   if(LABS[kind].map)return buildMapLab(LABS[kind],p,readout);
   if(LABS[kind].zones)return buildZoneLab(LABS[kind],p,readout);
@@ -126,7 +127,7 @@ function mountPreview(host,{mode="3d",openOptions=false,onLog,console:showCon=tr
 
 /* =================== navegación =================== */
 let G=null; // estado del editor
-const NAVOF={cero:"gds",gds:"gds",gds2:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones",mis:"lecciones",mapa:"lecciones"};
+const NAVOF={cero:"gds",gds:"gds",gds2:"gds",gds3:"gds",gds4:"gds",gds5:"gds",gds6:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones",mis:"lecciones",mapa:"lecciones"};
 const FPS_COURSES=["menu","fps2","fps3","mis","mapa"];
 function nextFPS(){for(const c of FPS_COURSES){const i=COURSES[c].lessons.findIndex(l=>!progress.done.includes(l.id));if(i>=0)return {c,i,all:false}}return {c:"menu",i:0,all:true}}
 function setNav(v){document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===v))}
@@ -172,7 +173,7 @@ function renderWelcome(rename=false){
 /* =================== inicio =================== */
 function renderInicio(){
   setNav("inicio");location.hash="inicio";
-  const st=currentStreak(),today=studiedToday(),nf=nextFPS(),fpsDone=FPS_COURSES.reduce((a,c)=>a+courseDone(c),0),fpsTot=FPS_COURSES.reduce((a,c)=>a+COURSES[c].lessons.length,0),gd=courseDone("gds")+courseDone("cero")+courseDone("gds2");
+  const st=currentStreak(),today=studiedToday(),nf=nextFPS(),fpsDone=FPS_COURSES.reduce((a,c)=>a+courseDone(c),0),fpsTot=FPS_COURSES.reduce((a,c)=>a+COURSES[c].lessons.length,0),GDS_ALL=["cero","gds","gds2","gds3","gds4","gds5","gds6"],gd=GDS_ALL.reduce((a,c)=>a+courseDone(c),0),gdT=GDS_ALL.reduce((a,c)=>a+COURSES[c].lessons.length,0);
   const letters=["D","L","M","M","J","V","S"],days=new Set(user.days||[]);
   let week="";for(let k=6;k>=0;k--){const d=new Date();d.setDate(d.getDate()-k);const s=dayStr(d);
     week+=`<div><span>${letters[d.getDay()]}</span><i class="${days.has(s)?"on":""} ${k===0?"today":""}" title="${s}"></i></div>`}
@@ -184,7 +185,7 @@ function renderInicio(){
         <div class="hello"><small>BIENVENIDO AL CUARTEL</small><h1>Hola, ${esc(user.name)}</h1></div>
         <nav class="hmenu" aria-label="Menú principal">
           <button class="hbtn" data-go="empezar">Empezar lección<small>Curso FPS 3D · ${nf.all?"Repasar: ":""}${esc(COURSES[nf.c].lessons[nf.i].title)}</small></button>
-          <button class="hbtn" data-go="gds">GDScript<small>De 0 en programación hasta GDScript intermedio · ${gd} de ${CERO.length+GDS.length+GDS2.length} lecciones</small></button>
+          <button class="hbtn" data-go="gds">GDScript<small>7 niveles: de 0 en programación a profesional · ${gd} de ${gdT} lecciones</small></button>
           <button class="hbtn" data-go="lecciones">Elegir lecciones<small>Curso FPS 3D · ${fpsDone} de ${fpsTot} completas · ${progress.xp} XP</small></button>
           <button class="hbtn" data-go="godot">Godot interactivo<small>Explorá el editor y descubrí para qué sirve cada botón</small></button>
           <button class="hbtn" data-go="patio">Patio de juegos<small>Probá el menú plano y el 3D</small></button>
@@ -238,13 +239,19 @@ function renderGDSChoice(){
       <button class="btn ${rec?"":"ghost"}" data-c="${c}">${d===0?btn:d===n?"Repasar":"Seguir: "+esc(C.lessons[nextIn(c)].title)}</button></article>`};
   const ceroDone=courseDone("cero")===CERO.length;
   app.innerHTML=`<section class="choice-head"><div class="kicker">GDScript</div><h1>¿Por dónde empezás?</h1>
-    <p>Elegí según lo que ya sabés. Si nunca escribiste código, empezá de 0 en programación. Si ya sabés lo básico, andá directo a GDScript para juegos 3D. Y cuando quieras organizar código como en un estudio, seguí con el Nivel 2.</p></section>
+    ${(()=>{const g=gdsTotals();return `<button class="dip-banner ${g.all?"on":""}" id="to-dip"><span class="dip-medal" aria-hidden="true"></span><span><b>Diploma de GDScript</b>${g.all?"¡Desbloqueado! Poné tu nombre y descargalo.":`Completá los 7 niveles para obtenerlo · ${g.done} de ${g.tot} lecciones`}</span><em>${g.all?"Ver diploma":"Ver progreso"}</em></button>`})()}
+    <p>Elegí según lo que ya sabés. Si nunca escribiste código, empezá de 0 en programación. Si ya sabés lo básico, andá directo a GDScript para juegos 3D. Después seguí nivel por nivel hasta el 6: avanzado, arquitectura, matemática 3D y profesional.</p></section>
     <div class="choice">
       ${card("cero",!ceroDone,["Qué es programar y por qué el orden importa","Qué es un nodo y qué es un script","Qué es una función: definir y llamar","Qué es _ready() y quién la llama","Qué es una variable","Cómo leer los errores"],"Empezar de 0 en programación")}
       ${card("gds",ceroDone,["Tipos de datos y Vector3","Condiciones, bucles y listas","Mover y girar objetos en 3D","Leer el teclado","Señales y física del jugador FPS"],"Empezar directo en GDScript 3D")}
       ${card("gds2",false,["Tipos estáticos y diccionarios","enum y match","Máquina de estados de un enemigo","Clases propias y herencia","Recursos .tres y depuración"],"Empezar el Nivel 2")}
+      ${card("gds3",false,["Señales propias y await","Lambdas y Callable","Setters y getters","Arrays tipados y static","Scripts @tool"],"Empezar el Nivel 3")}
+      ${card("gds4",false,["Instanciar escenas","Componentes reutilizables","Bus de eventos y grupos","Object pooling","Guardar partida en JSON"],"Empezar el Nivel 4")}
+      ${card("gds5",false,["Vectores y distancias","Cono de visión con dot","Torretas con lerp_angle","lerp y move_toward","Rayos por código"],"Empezar el Nivel 5")}
+      ${card("gds6",false,["Profiler y Monitores","Código que no traba","call_deferred","Proyecto ordenado y Git","Exportar a PC, Android y Web"],"Empezar el Nivel 6")}
     </div>
-    <div style="margin-top:36px">${coursePath("cero")}${coursePath("gds")}${coursePath("gds2")}</div>`;
+    <div style="margin-top:36px">${coursePath("cero")}${coursePath("gds")}${coursePath("gds2")}${coursePath("gds3")}${coursePath("gds4")}${coursePath("gds5")}${coursePath("gds6")}</div>`;
+  $("#to-dip").onclick=renderDiploma;
   app.querySelectorAll(".ccard [data-c]").forEach(b=>b.onclick=()=>startLesson(b.dataset.c,nextIn(b.dataset.c)));
   bindPaths();
 }
@@ -316,18 +323,108 @@ function finish(){
   const nextI=L.i+1<ls.length?L.i+1:null,c=L.c;
   const nx=COURSES[c].next,courseEnd=nextI===null&&!!nx;
   app.innerHTML=`<div class="lesson"><div class="step finish">
-    <div class="kicker">${nextI===null?(c==="cero"?"¡Nivel 0 completo!":c==="gds"?"¡Nivel 1 completo!":c==="gds2"?"¡Nivel 2 completo!":"¡Unidad completa!"):"Lección completa"}</div><div class="big">+${gain} XP</div>
+    <div class="kicker">${nextI===null?((c==="cero"||c.startsWith("gds"))?`¡${COURSES[c].tag.split("· ")[1]} completo!`:"¡Unidad completa!"):"Lección completa"}</div><div class="big">+${gain} XP</div>
     <div class="fire">${FLAME}${grew?`¡Racha de ${st} ${st===1?"día":"días"}!`:`Racha: ${st} ${st===1?"día":"días"} (hoy ya contaba)`}</div>
     <h2 style="margin-top:12px">${esc(les.title)}</h2>
     <p>${L.mistakes===0?"Sin errores. Impecable.":`Tuviste ${L.mistakes} error${L.mistakes>1?"es":""}. Podés repetirla cuando quieras.`} ${first?"":"Por repasar sumás 5 XP."}${courseEnd?` Lo siguiente es: ${esc(COURSES[nx].title)}.`:nextI===null?" Pronto llegan las próximas unidades.":""}</p>
+    ${GDS_PATH.includes(c)&&gdsTotals().all?`<p class="dip-unlock"><b>¡Completaste los 7 niveles de GDScript!</b> Ya podés obtener tu diploma.</p>`:""}
     <div class="row-btns">
+      ${GDS_PATH.includes(c)&&gdsTotals().all?'<button class="btn ok" id="f-dip">Obtener mi diploma</button>':""}
       <button class="btn ghost" id="f-home">Volver al inicio</button>
       <button class="btn ghost" id="f-godot">Abrir Godot interactivo</button>
       ${nextI!==null?`<button class="btn" id="f-next">Siguiente: ${esc(ls[nextI].title)}</button>`:courseEnd?`<button class="btn" id="f-menu">Seguir con: ${esc(COURSES[nx].title)}</button>`:""}
     </div></div></div>`;
   $("#f-home").onclick=renderInicio;$("#f-godot").onclick=()=>go("godot");
+  if($("#f-dip"))$("#f-dip").onclick=renderDiploma;
   if(nextI!==null)$("#f-next").onclick=()=>startLesson(c,nextI);
   if(courseEnd)$("#f-menu").onclick=()=>startLesson(nx,nextIn(nx));
+}
+
+/* =================== diploma de GDScript =================== */
+const GDS_PATH=["cero","gds","gds2","gds3","gds4","gds5","gds6"];
+const GDS_SHORT=["Fundamentos","GDScript 3D","Intermedio","Avanzado","Arquitectura","Matemática 3D","Profesional"];
+function gdsTotals(){const tot=GDS_PATH.reduce((a,c)=>a+COURSES[c].lessons.length,0),done=GDS_PATH.reduce((a,c)=>a+courseDone(c),0);return {tot,done,all:done>=tot}}
+function diplomaCode(nombre,fecha){let h=2166136261;for(const ch of nombre+"|"+fecha){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)>>>0}
+  const s=h.toString(36).toUpperCase().padStart(7,"0");return `AGB-${s.slice(0,4)}-${s.slice(4)}`}
+function fechaLarga(iso){const m=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];const d=parseDay(iso);return `${d.getDate()} de ${m[d.getMonth()]} de ${d.getFullYear()}`}
+
+function dibujarDiploma(cv,nombre,fecha){
+  const W=2000,H=1414,x=cv.getContext("2d");cv.width=W;cv.height=H;
+  const NAVY="#16202c",ORANGE="#c98a3c",PAPER="#f7f5ef",INK="#3d4652",SOFT="#8a93a0";
+  x.fillStyle=PAPER;x.fillRect(0,0,W,H);
+  // trama sutil de grilla, como papel milimetrado de editor
+  x.strokeStyle="rgba(22,32,44,.035)";x.lineWidth=1;for(let i=0;i<W;i+=40){x.beginPath();x.moveTo(i,0);x.lineTo(i,H);x.stroke()}for(let j=0;j<H;j+=40){x.beginPath();x.moveTo(0,j);x.lineTo(W,j);x.stroke()}
+  x.strokeStyle=NAVY;x.lineWidth=16;x.strokeRect(44,44,W-88,H-88);
+  x.strokeStyle=ORANGE;x.lineWidth=3;x.strokeRect(78,78,W-156,H-156);
+  x.fillStyle=ORANGE;[[78,78],[W-78,78],[78,H-78],[W-78,H-78]].forEach(([a,b])=>{x.save();x.translate(a,b);x.rotate(Math.PI/4);x.fillRect(-11,-11,22,22);x.restore()});
+  const C=(t,y,font,color,ls=0)=>{x.font=font;x.fillStyle=color;x.textAlign="center";x.textBaseline="alphabetic";
+    if(ls){const chars=[...t],w=chars.reduce((a,c)=>a+x.measureText(c).width,0)+ls*(chars.length-1);let px=W/2-w/2;x.textAlign="left";chars.forEach(c=>{x.fillText(c,px,y);px+=x.measureText(c).width+ls})}else x.fillText(t,W/2,y)};
+  // orejas de burro
+  const ear=(cx,rot)=>{x.save();x.translate(cx,215);x.rotate(rot);x.fillStyle=ORANGE;x.beginPath();x.ellipse(0,0,22,58,0,0,Math.PI*2);x.fill();x.fillStyle="#f1cf9f";x.beginPath();x.ellipse(0,6,11,40,0,0,Math.PI*2);x.fill();x.restore()};
+  ear(W/2-30,-.25);ear(W/2+30,.25);
+  C("APRENDE GODOT BURRO",318,'600 30px "Chakra Petch", Arial, sans-serif',NAVY,10);
+  C("DIPLOMA",450,'700 128px "Chakra Petch", Arial, sans-serif',NAVY,14);
+  C("CAMINO COMPLETO DE GDSCRIPT · GODOT 4",510,'700 28px "Chakra Petch", Arial, sans-serif',ORANGE,7);
+  C("Se otorga a",612,'600 36px Nunito, Arial, sans-serif',SOFT);
+  let size=118;x.font=`italic 600 ${size}px "Cormorant Garamond", Georgia, serif`;while(x.measureText(nombre).width>1500&&size>50){size-=4;x.font=`italic 600 ${size}px "Cormorant Garamond", Georgia, serif`}
+  C(nombre,740,x.font,NAVY);
+  x.strokeStyle=ORANGE;x.lineWidth=2;x.beginPath();x.moveTo(W/2-560,772);x.lineTo(W/2+560,772);x.stroke();
+  C("por completar los 7 niveles y las 43 lecciones del camino de GDScript,",850,'400 34px Nunito, Arial, sans-serif',INK);
+  C("desde los fundamentos de la programación hasta el desarrollo profesional de juegos 3D.",900,'400 34px Nunito, Arial, sans-serif',INK);
+  // los 7 niveles
+  const y0=1005,gap=228,start=W/2-gap*3;
+  x.strokeStyle="rgba(201,138,60,.55)";x.lineWidth=3;x.beginPath();x.moveTo(start,y0);x.lineTo(start+gap*6,y0);x.stroke();
+  GDS_SHORT.forEach((t,i)=>{const cx=start+gap*i;x.fillStyle=NAVY;x.beginPath();x.arc(cx,y0,32,0,Math.PI*2);x.fill();
+    x.font='700 30px "Chakra Petch", Arial, sans-serif';x.fillStyle="#fff";x.textAlign="center";x.fillText(String(i),cx,y0+11);
+    x.font='700 22px Nunito, Arial, sans-serif';x.fillStyle=INK;x.fillText(t,cx,y0+72)});
+  // firmas
+  const sig=(cx,big,small)=>{x.strokeStyle=NAVY;x.lineWidth=2;x.beginPath();x.moveTo(cx-230,1218);x.lineTo(cx+230,1218);x.stroke();
+    x.textAlign="center";x.font='600 34px Nunito, Arial, sans-serif';x.fillStyle=NAVY;x.fillText(big,cx,1200);
+    x.font='700 20px "Chakra Petch", Arial, sans-serif';x.fillStyle=SOFT;x.fillText(small,cx,1252)};
+  sig(470,fechaLarga(fecha),"FECHA");sig(W-470,"Hornero Development","EMITIDO POR");
+  x.textAlign="center";x.font='600 22px "JetBrains Mono", monospace';x.fillStyle=SOFT;x.fillText(`N.º ${diplomaCode(nombre,fecha)}`,W/2,1212);
+  x.font='400 19px Nunito, Arial, sans-serif';x.fillText("Certificado de finalización de un curso en línea · hornero-development.github.io/aprende-godot-burro",W/2,1300);
+}
+
+function renderDiploma(){
+  stop3D();setNav("gds");location.hash="diploma";
+  const g=gdsTotals();
+  if(!g.all){
+    app.innerHTML=`<section class="dip-wrap"><div class="kicker">Diploma de GDScript</div><h1>Todavía te falta un poco</h1>
+      <p class="lead">El diploma se desbloquea cuando completás las ${g.tot} lecciones de los 7 niveles de GDScript. Vas ${g.done} de ${g.tot}.</p>
+      <div class="bar dip-bar"><span style="width:${g.done/g.tot*100}%"></span></div>
+      <ul class="dip-levels">${GDS_PATH.map((c,i)=>{const d=courseDone(c),n=COURSES[c].lessons.length;
+        return `<li class="${d===n?"ok":""}"><b>${i}</b><span>${esc(COURSES[c].title)}</span><em>${d} / ${n}</em></li>`}).join("")}</ul>
+      <button class="btn" id="dip-go">Seguir aprendiendo</button></section>`;
+    $("#dip-go").onclick=()=>{const c=GDS_PATH.find(c=>courseDone(c)<COURSES[c].lessons.length);startLesson(c,nextIn(c))};return}
+  user.diploma=user.diploma||{nombre:"",apellido:"",fecha:dayStr()};
+  const D=user.diploma;
+  app.innerHTML=`<section class="dip-wrap"><div class="kicker">¡Completaste GDScript!</div><h1>Tu diploma</h1>
+    <p class="lead">Escribí tu nombre y apellido tal como querés que aparezcan. Se guarda en este navegador.</p>
+    <form class="dip-form" id="dip-form" novalidate>
+      <div class="field"><label for="dip-nom">Nombre</label><input id="dip-nom" maxlength="30" autocomplete="given-name" value="${esc(D.nombre)}" placeholder="Leandro"></div>
+      <div class="field"><label for="dip-ape">Apellido</label><input id="dip-ape" maxlength="30" autocomplete="family-name" value="${esc(D.apellido)}" placeholder="Fernández"></div>
+    </form>
+    <div class="err" id="dip-err"></div>
+    <div class="dip-sheet"><img id="dip-img" alt="Diploma de GDScript de Aprende Godot Burro"></div>
+    <div class="row-btns" style="justify-content:flex-start">
+      <button class="btn" id="dip-dl">Descargar imagen (PNG)</button>
+      <button class="btn ghost" id="dip-print">Imprimir o guardar en PDF</button>
+    </div>
+    <p class="dip-note" id="dip-note">Si la descarga no arranca, hacé clic derecho sobre el diploma y elegí "Guardar imagen como…".</p></section>
+    <canvas id="dip-cv" hidden></canvas>`;
+  const cv=$("#dip-cv"),img=$("#dip-img");
+  const full=()=>`${$("#dip-nom").value.trim()} ${$("#dip-ape").value.trim()}`.trim();
+  const draw=()=>{const n=full()||"Tu nombre y apellido";dibujarDiploma(cv,n,D.fecha);try{img.src=cv.toDataURL("image/png")}catch(e){}};
+  const save=()=>{D.nombre=$("#dip-nom").value.trim();D.apellido=$("#dip-ape").value.trim();store.set("agb-usuario",user)};
+  const fonts=['700 40px "Chakra Petch"','italic 600 40px "Cormorant Garamond"','400 20px Nunito','600 20px "JetBrains Mono"'];
+  Promise.all(fonts.map(f=>document.fonts&&document.fonts.load?document.fonts.load(f).catch(()=>{}):null)).then(draw);draw();
+  $("#dip-form").addEventListener("input",()=>{save();draw();$("#dip-err").textContent=""});
+  const ok=()=>{if(!$("#dip-nom").value.trim()||!$("#dip-ape").value.trim()){$("#dip-err").textContent="Escribí tu nombre y tu apellido para completar el diploma.";return false}return true};
+  $("#dip-dl").onclick=()=>{if(!ok())return;draw();
+    cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`diploma-gdscript-${full().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-")}.png`;
+      document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);blip(880)},"image/png")};
+  $("#dip-print").onclick=()=>{if(!ok())return;draw();try{window.print()}catch(e){}};
 }
 
 /* =================== patio =================== */

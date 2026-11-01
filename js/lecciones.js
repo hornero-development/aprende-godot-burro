@@ -1630,11 +1630,360 @@ const GDS2=[
   {type:"info",kicker:"¡Nivel 2 completo!",title:"Ya programás como en un estudio",html:`<p>Tipos, diccionarios, enum y match, máquinas de estados, herencia, recursos y depuración son las herramientas que se usan todos los días en juegos de verdad. Con esto podés leer y entender el código de casi cualquier proyecto de Godot, y organizar el tuyo para que crezca sin volverse un lío.</p>`}
  ]}
 ];
+/* =================== GDScript · Niveles 3 a 6 =================== */
+Object.assign(LABS,{
+ vision:{code:`@export var angulo_vision := __g__   # grados del cono
+@export var distancia := __d__
+
+func puede_ver(objetivo: Node3D) -> bool:
+	var hacia := global_position.direction_to(objetivo.global_position)
+	var adelante := -global_transform.basis.z
+	var limite := cos(deg_to_rad(angulo_vision / 2))
+	var en_cono := adelante.dot(hacia) > limite
+	var cerca := global_position.distance_to(objetivo.global_position) < distancia
+	return en_cono and cerca`,
+  params:{g:{val:90,min:10,max:360,step:5},d:{val:8,min:2,max:14,step:0.5}},topdown:"vision",keys:true,
+  pad:[["KeyW","W ↑"],["KeyA","A ←"],["KeyS","S ↓"],["KeyD","D →"]],
+  hint:"Movete con WASD. El guardia mira a los costados: entrá en su cono."},
+ torreta:{code:`@export var velocidad_giro := __v__   # qué tan rápido gira
+
+func _process(delta):
+	var objetivo := jugador.global_position
+	var dir := global_position.direction_to(objetivo)
+	var angulo_deseado := atan2(-dir.x, -dir.z)
+	rotation.y = lerp_angle(rotation.y, angulo_deseado, delta * velocidad_giro)`,
+  params:{v:{val:3,min:0.2,max:20,step:0.2}},topdown:"torreta",keys:true,
+  pad:[["KeyW","W ↑"],["KeyA","A ←"],["KeyS","S ↓"],["KeyD","D →"]],
+  hint:"Corré alrededor de la torreta. Con velocidad baja no te alcanza a seguir."}
+});
+
+function buildTopLab(def,p,readout){
+  const T=THREE,mode=def.topdown,scene=new T.Scene();scene.background=new T.Color(0x1f2833);
+  const cam=new T.PerspectiveCamera(45,16/9,.1,200);cam.position.set(0,24,12);cam.lookAt(0,0,0);
+  scene.add(new T.HemisphereLight(0xffffff,0x334455,.9));const dl=new T.DirectionalLight(0xffffff,.6);dl.position.set(5,12,6);scene.add(dl);
+  const floor=new T.Mesh(new T.PlaneGeometry(32,24),new T.MeshStandardMaterial({color:0x48503f}));floor.rotation.x=-Math.PI/2;scene.add(floor);
+  scene.add(new T.GridHelper(32,32,0x5a6250,0x535b4a));
+  const pm=new T.MeshStandardMaterial({color:0x4f9fe0,flatShading:true});const P=new T.Group();
+  const pb=new T.Mesh(new T.CylinderGeometry(.45,.45,1.2,14),pm);pb.position.y=.6;P.add(pb);P.position.set(-8,0,5);scene.add(P);
+  const em=new T.MeshStandardMaterial({color:0x8e9cb1,flatShading:true});const E=new T.Group();scene.add(E);
+  if(mode==="vision"){const b=new T.Mesh(new T.CylinderGeometry(.5,.5,1.3,14),em);b.position.y=.65;E.add(b)}
+  else{const base=new T.Mesh(new T.CylinderGeometry(1,1.2,.6,16),new T.MeshStandardMaterial({color:0x4f5d6e,flatShading:true}));base.position.y=.3;scene.add(base);
+    const head=new T.Mesh(new T.BoxGeometry(1.2,.7,1.2),em);head.position.y=1;E.add(head)}
+  const nose=new T.Mesh(new T.BoxGeometry(.25,.25,mode==="vision"?.7:2),new T.MeshStandardMaterial({color:0x222222}));nose.position.set(0,1.05,mode==="vision"?-.55:-1.4);E.add(nose);
+  // cono de visión: abanico dibujado de nuevo cuando cambian los parámetros
+  const coneM=new T.MeshBasicMaterial({color:0xe3a75b,transparent:true,opacity:.22,side:T.DoubleSide});let cone=null;
+  const beam=new T.Mesh(new T.BoxGeometry(.06,.06,1),new T.MeshBasicMaterial({color:0xff6a5a}));beam.visible=false;scene.add(beam);
+  const lab={scene,cam,keys:true,tick(){},rebuild(){}};
+  lab.rebuild=()=>{if(mode!=="vision")return;if(cone){E.remove(cone);cone.geometry.dispose()}
+    const a=Math.min(359.9,p.g)*Math.PI/180;cone=new T.Mesh(new T.CircleGeometry(p.d,48,Math.PI/2-a/2,a),coneM);cone.rotation.x=-Math.PI/2;cone.position.y=.04;E.add(cone)};
+  let t=0,fire=0;
+  lab.tick=dt=>{t+=dt;
+    let x=0,z=0;if(KEYS.has("KeyD")||KEYS.has("ArrowRight"))x+=1;if(KEYS.has("KeyA")||KEYS.has("ArrowLeft"))x-=1;if(KEYS.has("KeyS")||KEYS.has("ArrowDown"))z+=1;if(KEYS.has("KeyW")||KEYS.has("ArrowUp"))z-=1;
+    const l=Math.hypot(x,z)||1;P.position.x=Math.max(-15,Math.min(15,P.position.x+x/l*6*dt));P.position.z=Math.max(-11,Math.min(11,P.position.z+z/l*6*dt));
+    const dx=P.position.x-E.position.x,dz=P.position.z-E.position.z,dist=Math.hypot(dx,dz)||1e-6,hx=dx/dist,hz=dz/dist;
+    if(mode==="vision"){E.rotation.y=Math.sin(t*.5)*1.3;
+      const fx=-Math.sin(E.rotation.y),fz=-Math.cos(E.rotation.y),dot=fx*hx+fz*hz,lim=Math.cos(Math.min(360,p.g)*Math.PI/360);
+      const ve=dot>lim&&dist<p.d;em.color.setHex(ve?0xe85a50:0x8e9cb1);coneM.color.setHex(ve?0xe85a50:0xe3a75b);
+      beam.visible=ve;if(ve){beam.position.set((P.position.x+E.position.x)/2,1,(P.position.z+E.position.z)/2);beam.scale.z=dist;beam.lookAt(P.position.x,1,P.position.z)}
+      readout(`adelante.dot(hacia) = ${dot.toFixed(2)}   límite cos(${(p.g/2).toFixed(0)}°) = ${lim.toFixed(2)}\ndistancia = ${dist.toFixed(1)} / ${p.d}   puede_ver() = ${ve}`)}
+    else{const want=Math.atan2(-dx,-dz);let diff=want-E.rotation.y;diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+      E.rotation.y+=diff*Math.min(1,dt*p.v);const deg=Math.abs(diff)*180/Math.PI;
+      fire-=dt;if(deg<6&&fire<=0){fire=.5;blip(170);beam.visible=true;beam.position.set((P.position.x+E.position.x)/2,1,(P.position.z+E.position.z)/2);beam.scale.z=dist;beam.lookAt(P.position.x,1,P.position.z)}
+      if(fire<.4)beam.visible=false;
+      readout(`ángulo deseado = ${(want*180/Math.PI).toFixed(0)}°   rotation.y = ${(E.rotation.y*180/Math.PI%360).toFixed(0)}°\nle falta girar ${deg.toFixed(0)}°   ${deg<6?"¡en la mira!":"apuntando…"}`)}};
+  return lab;
+}
+
+const SPAWN_GD = `const ESCENA_ENEMIGO := preload("res://enemigos/soldado.tscn")
+
+@onready var puntos: Array[Node] = $PuntosDeAparicion.get_children()
+
+func aparecer_enemigo():
+	var enemigo: Node3D = ESCENA_ENEMIGO.instantiate()
+	var punto: Marker3D = puntos.pick_random()
+	enemigo.position = punto.global_position
+	add_child(enemigo)`;
+
+const VIDA_GD = `# componente_vida.gd
+class_name ComponenteVida
+extends Node
+
+signal vida_cambiada(actual, maxima)
+signal murio
+
+@export var vida_max := 100
+var vida := 0
+
+func _ready():
+	vida = vida_max
+
+func recibir_danio(cantidad: int):
+	if vida <= 0:
+		return
+	vida = max(vida - cantidad, 0)
+	vida_cambiada.emit(vida, vida_max)
+	if vida == 0:
+		murio.emit()
+
+func curar(cantidad: int):
+	vida = min(vida + cantidad, vida_max)
+	vida_cambiada.emit(vida, vida_max)`;
+
+const EVENTOS_GD = `# eventos.gd  (Autoload llamado "Eventos")
+extends Node
+
+signal enemigo_eliminado(enemigo, por_arma)
+signal objetivo_cumplido(id)
+signal jugador_herido(cantidad)
+signal vehiculo_destruido(vehiculo)`;
+
+const GUARDAR_JSON_GD = `const RUTA := "user://partida.json"
+
+func guardar(jugador: Node3D, inventario: Dictionary):
+	var datos := {
+		"posicion": [jugador.position.x, jugador.position.y, jugador.position.z],
+		"vida": jugador.vida,
+		"inventario": inventario,
+		"mision_actual": GestorMisiones.actual,
+	}
+	var archivo := FileAccess.open(RUTA, FileAccess.WRITE)
+	archivo.store_string(JSON.stringify(datos, "\\t"))
+
+func cargar() -> Dictionary:
+	if not FileAccess.file_exists(RUTA):
+		return {}
+	var archivo := FileAccess.open(RUTA, FileAccess.READ)
+	var datos = JSON.parse_string(archivo.get_as_text())
+	return datos if datos is Dictionary else {}`;
+
+const RAYO_CODIGO_GD = `func hay_linea_de_vision(desde: Vector3, hasta: Vector3) -> bool:
+	var espacio := get_world_3d().direct_space_state
+	var consulta := PhysicsRayQueryParameters3D.create(desde, hasta)
+	consulta.exclude = [get_rid()]   # que el rayo no choque con uno mismo
+	var resultado := espacio.intersect_ray(consulta)
+	if resultado.is_empty():
+		return true                 # no chocó con nada en el medio
+	return resultado.collider == jugador`;
+
+const GDS3=[
+ {id:"i1",title:"Señales propias y await",sub:"Avisar con datos y esperar eventos",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Señales con parámetros",html:`<p>Ya usaste señales. Ahora creás las tuyas y les pasás datos:</p>
+   <pre class="code">${hl(`signal vida_cambiada(actual: int, maxima: int)\n\nfunc recibir_danio(cantidad: int):\n\tvida -= cantidad\n\tvida_cambiada.emit(vida, vida_max)`)}</pre>
+   <p>Quien escucha recibe esos datos en su función: <code class="i">func _on_vida_cambiada(actual, maxima):</code>.</p>
+   <p><b>await</b> también sirve con señales: pausa la función hasta que la señal ocurra, sin congelar el juego.</p>
+   <pre class="code">${hl(`func recargar():\n\t$Animaciones.play("recargar")\n\tawait $Animaciones.animation_finished\n\tbalas = 30   # recién cuando terminó la animación`)}</pre>
+   <p>Y si querés escuchar algo <b>una sola vez</b>: <code class="i">senal.connect(funcion, CONNECT_ONE_SHOT)</code>.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace await $Animaciones.animation_finished?",options:["Congela todo el juego hasta que termine la animación","Pausa solo esa función hasta que termine la animación; el juego sigue","Saltea la animación","Repite la animación"],answer:1,explain:"await pausa la función que lo contiene. El resto del juego sigue andando."},
+  {type:"fill",kicker:"Completá",q:"Avisar la vida nueva a quien escuche:",code:`vida_cambiada.____(vida, vida_max)`,options:["emit","connect","call","send"],answer:0,explain:"emit dispara la señal con sus datos. connect es para escucharla."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve CONNECT_ONE_SHOT?",options:["Para disparar una vez","Para que la conexión se borre sola después de la primera vez que llega la señal","Para conectar más rápido","Para que sea global"],answer:1,explain:"Útil para cosas que pasan una sola vez, como el primer contacto con un enemigo."}
+ ]},
+ {id:"i2",title:"Lambdas y Callable",sub:"Funciones como valores",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Guardar una función en una variable",html:`<p>En GDScript una función también puede ser un valor: un <code class="i">Callable</code>. Lo podés guardar, pasar a otra función o conectar.</p>
+   <pre class="code">${hl(`var al_morir := func(): print("Game over")\nal_morir.call()\n\n# bind agrega datos fijos al llamar\nboton_rifle.pressed.connect(_elegir_arma.bind("rifle"))\nboton_escopeta.pressed.connect(_elegir_arma.bind("escopeta"))\n\nfunc _elegir_arma(nombre: String):\n\tprint("Elegiste ", nombre)`)}</pre>
+   <p>Las lambdas también sirven con los métodos de los arrays:</p>
+   <pre class="code">${hl(`var enemigos_vivos := enemigos.filter(func(e): return e.vida > 0)\nvar vidas := enemigos.map(func(e): return e.vida)\nenemigos.sort_custom(func(a, b): return a.vida < b.vida)`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué devuelve enemigos.filter(func(e): return e.vida > 0)?",options:["El primer enemigo","Un array nuevo solo con los enemigos que tienen vida mayor a 0","La suma de las vidas","true o false"],answer:1,explain:"filter se queda con los elementos para los que la función devuelve true."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve .bind(\"rifle\")?",options:["Para borrar la conexión","Para que, cuando llegue la señal, la función se llame con \"rifle\" como dato","Para cambiar el nombre del botón","Para cargar el rifle"],answer:1,explain:"bind fija argumentos. Así una sola función sirve para varios botones."},
+  {type:"fill",kicker:"Completá",q:"Ordenar los enemigos del más cercano al más lejano:",code:`enemigos.____(func(a, b): return a.distancia < b.distancia)`,options:["sort_custom","filter","map","sort"],answer:0,explain:"sort_custom ordena con tu propia regla. sort solo funciona con valores simples."}
+ ]},
+ {id:"i3",title:"Setters y getters",sub:"Código que corre al cambiar una variable",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Variables que se cuidan solas",html:`<p>Un <b>setter</b> es código que corre <b>cada vez que alguien cambia la variable</b>. Ideal para validar y avisar:</p>
+   <pre class="code">${hl(`signal vida_cambiada(valor)\n\nvar vida := 100:\n\tset(valor):\n\t\tvida = clamp(valor, 0, 100)\n\t\tvida_cambiada.emit(vida)\n\nfunc _ready():\n\tvida -= 150   # queda en 0, no en -50, y avisa solo`)}</pre>
+   <p>Un <b>getter</b> calcula el valor cuando alguien lo lee:</p>
+   <pre class="code">${hl(`var esta_vivo: bool:\n\tget:\n\t\treturn vida > 0`)}</pre>
+   <p>Así nadie puede dejar la vida en negativo, y el HUD se entera solo de cada cambio.</p>`},
+  {type:"trace",kicker:"Paso a paso",title:"El setter en acción",html:`<p>Mirá cómo el setter corrige el valor.</p>`,
+   code:`var vida := 100:\n\tset(valor):\n\t\tvida = clamp(valor, 0, 100)\n\t\tvida_cambiada.emit(vida)\n\nfunc _ready():\n\tvida -= 150`,
+   steps:[{line:0,say:"La vida arranca en 100.",vars:{vida:"100"}},{line:5,say:"Godot llama a _ready."},
+    {line:6,say:"100 - 150 = -50. Pero como vida tiene setter, ese -50 entra al setter como valor.",vars:{valor:"-50"}},
+    {line:2,say:"clamp(-50, 0, 100) es 0. Se guarda 0, no -50.",vars:{vida:"0"}},
+    {line:3,say:"Avisa el cambio. El HUD lo muestra sin que nadie más haga nada.",out:"vida_cambiada(0)"}]},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué ventaja tiene el setter frente a acordarse de llamar emit en cada lugar donde cambia la vida?",options:["Ninguna","Que no te podés olvidar: cualquier cambio, venga de donde venga, pasa por el setter","Que es más lento","Que la vida no se puede cambiar"],answer:1,explain:"Centraliza la regla. Daño, curación o trucos de prueba: todo pasa por el mismo lugar."}
+ ]},
+ {id:"i4",title:"Arrays tipados y funciones estáticas",sub:"Array[Enemigo] y static func",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Listas que solo aceptan un tipo",html:`<p>Igual que las variables, los arrays pueden tener tipo:</p>
+   <pre class="code">${hl(`var enemigos: Array[Enemigo] = []\nvar puntos: Array[Vector3] = [Vector3.ZERO, Vector3(5, 0, 2)]`)}</pre>
+   <p>Godot te avisa si metés algo que no corresponde, y el autocompletado sabe qué tiene cada elemento.</p>
+   <p>Una función <b>static</b> no necesita un nodo para usarse. Se llama con el nombre de la clase. Sirve para herramientas generales:</p>
+   <pre class="code">${hl(`class_name Utilidades\n\nstatic func distancia_plana(a: Vector3, b: Vector3) -> float:\n\treturn Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))\n\n# desde cualquier script:\nvar d := Utilidades.distancia_plana(jugador.position, objetivo.position)`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"var armas: Array[String] = []. ¿Qué pasa con armas.append(42)?",options:["Se agrega 42","Error: el array solo acepta String","Se convierte en \"42\" solo","Se borra el array"],answer:1,explain:"Los arrays tipados rechazan otros tipos."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Cuándo conviene una función static?",options:["Cuando necesita las variables de un nodo concreto","Cuando es una herramienta general que no depende de ningún nodo, como un cálculo","Siempre","Nunca"],answer:1,explain:"Las static no tienen acceso a self. Son perfectas para cálculos y ayudas."}
+ ]},
+ {id:"i5",title:"Scripts @tool",sub:"Código que corre dentro del editor",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Ver el resultado sin darle Play",html:`<p>Si ponés <code class="i">@tool</code> en la primera línea, el script también corre <b>en el editor</b>. Sirve para herramientas propias: acomodar objetos, generar terreno o mostrar ayudas visuales mientras armás el nivel.</p>
+   <pre class="code">${hl(`@tool\nextends Node3D\n\n@export var cantidad := 5:\n\tset(valor):\n\t\tcantidad = valor\n\t\tif Engine.is_editor_hint():\n\t\t\tacomodar_vallas()\n\nfunc acomodar_vallas():\n\tfor i in get_child_count():\n\t\tget_child(i).position.x = i * 2.0`)}</pre>
+   <p><code class="i">Engine.is_editor_hint()</code> es true en el editor y false en el juego, así separás el código de cada caso.</p>
+   <p>Ojo: un script @tool con errores puede trabar el editor. Guardá seguido y probalo de a poco.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve Engine.is_editor_hint()?",options:["Para saber si el juego está en pausa","Para saber si el código corre en el editor (true) o en el juego (false)","Para mostrar pistas al jugador","Para exportar"],answer:1,explain:"Con eso decidís qué parte del código corre en cada lugar."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Cuál es un buen uso de @tool?",options:["Guardar la partida","Que al cambiar 'cantidad' en el Inspector, las vallas se acomoden solas en el editor","Disparar más rápido","Conectarse a internet"],answer:1,explain:"@tool es para herramientas que te ahorran trabajo mientras armás el nivel."}
+ ]},
+ {id:"i6",title:"Repaso del Nivel 3",sub:"Todo junto en un caso real",xp:30,steps:[
+  {type:"info",kicker:"Caso real",title:"Barra de vida que se actualiza sola",html:`<pre class="code">${hl(`# jugador.gd\nsignal vida_cambiada(actual: int, maxima: int)\nconst VIDA_MAX := 100\n\nvar vida := VIDA_MAX:\n\tset(valor):\n\t\tvida = clamp(valor, 0, VIDA_MAX)\n\t\tvida_cambiada.emit(vida, VIDA_MAX)\n\n# hud.gd\nfunc _ready():\n\tjugador.vida_cambiada.connect(func(actual, maxima):\n\t\t$BarraVida.value = float(actual) / maxima * 100)`)}</pre>
+   <p>Setter, señal con datos y lambda: el jugador no conoce al HUD, y el HUD se actualiza solo con cualquier cambio de vida.</p>`},
+  {type:"quiz",kicker:"Repaso",q:"¿Por qué se escribe float(actual) / maxima y no actual / maxima?",options:["Por estética","Porque entre dos int la división descarta los decimales: 50 / 100 daría 0","Para que sea negativo","Da igual"],answer:1,explain:"En GDScript, int dividido int da int. Con float(…) el resultado es 0.5."},
+  {type:"quiz",kicker:"Repaso",q:"La animación de recarga tiene que terminar antes de sumar balas. ¿Qué usás?",options:["await $Animaciones.animation_finished","Un for","Un setter","static func"],answer:0,explain:"await espera la señal de fin de la animación."}
+ ]}
+];
+
+const GDS4=[
+ {id:"k1",title:"Instanciar escenas",sub:"preload, instantiate y add_child",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Crear enemigos durante el juego",html:`<p>Un enemigo, una bala o una explosión son escenas (.tscn). Para crearlas mientras se juega:</p>
+   <ol><li><code class="i">preload("res://...tscn")</code> carga la escena al arrancar.</li><li><code class="i">.instantiate()</code> crea una copia nueva.</li><li><code class="i">add_child(copia)</code> la mete en el juego.</li></ol>
+   <pre class="code">${hl(SPAWN_GD)}</pre>
+   <p><code class="i">pick_random()</code> elige un punto de aparición al azar entre varios <code class="i">Marker3D</code>.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué diferencia hay entre preload y load?",options:["Ninguna","preload carga cuando se abre el script (más rápido en juego); load carga en el momento en que se ejecuta la línea","load es más nuevo","preload es para imágenes"],answer:1,explain:"preload evita tirones durante el juego. load sirve cuando la ruta cambia o la decidís en el momento."},
+  {type:"fill",kicker:"Completá",q:"Crear una copia de la escena:",code:`var bala := ESCENA_BALA.____()`,options:["instantiate","new","duplicate","load"],answer:0,explain:"instantiate crea los nodos de la escena. Después hay que agregarlos con add_child."},
+  {type:"quiz",kicker:"Pregunta",q:"Instanciás un enemigo pero no aparece. ¿Qué falta casi seguro?",options:["add_child(enemigo)","queue_free()","print()","Un enum"],answer:0,explain:"Sin add_child la copia existe en memoria pero no está en el árbol, así que no se ve ni hace nada."}
+ ]},
+ {id:"k2",title:"Componentes",sub:"Piezas reutilizables: vida, daño, botín",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Armar con piezas en vez de heredar todo",html:`<p>Un soldado, un barril, un tanque y un helicóptero tienen vida. En vez de copiar el código, creás un <b>componente</b>: un nodo con un solo trabajo que se agrega como hijo a quien lo necesite.</p>
+   <pre class="code">${hl(VIDA_GD)}</pre>
+   <div class="tree"><span class="t">Barril</span> <span class="m">(RigidBody3D)</span>
+├─ <span class="t">ComponenteVida</span>  <span class="m">vida_max = 30</span>
+└─ <span class="t">ComponenteExplosion</span>
+<span class="t">Tanque</span> <span class="m">(VehicleBody3D)</span>
+├─ <span class="t">ComponenteVida</span>  <span class="m">vida_max = 800</span>
+└─ <span class="t">ComponenteBotin</span></div>
+   <p>El arma ya no pregunta "¿es un enemigo o un barril?". Solo busca si tiene un ComponenteVida y le pasa el daño.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué ventaja tiene el componente de vida frente a programar la vida dentro de cada enemigo?",options:["Ninguna","Se escribe una vez y sirve para soldados, barriles y vehículos; un arreglo vale para todos","Es más lento","Solo sirve para el jugador"],answer:1,explain:"Composición: piezas chicas que se combinan. Es la forma en que Godot está pensado."},
+  {type:"fill",kicker:"Completá",q:"Que la vida nunca baje de 0:",code:`vida = ____(vida - cantidad, 0)`,options:["max","min","clamp","abs"],answer:0,explain:"max devuelve el mayor de los dos: si vida - cantidad es negativo, queda 0."}
+ ]},
+ {id:"k3",title:"Bus de eventos",sub:"Un Autoload con señales globales",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Un tablero de anuncios",html:`<p>A veces cosas muy lejanas en el árbol tienen que enterarse de algo: el HUD, la música, las misiones y los logros quieren saber cuándo muere un enemigo. Conectar todo con todo es un lío.</p>
+   <p>Solución: un <b>Autoload</b> llamado <b>Eventos</b> que solo tiene señales. Es un tablero de anuncios: cualquiera publica y cualquiera escucha.</p>
+   <pre class="code">${hl(EVENTOS_GD)}</pre>
+   <pre class="code">${hl(`# en el enemigo, al morir:\nEventos.enemigo_eliminado.emit(self, arma_actual)\n\n# en la música, en logros o en misiones:\nfunc _ready():\n\tEventos.enemigo_eliminado.connect(_on_enemigo_eliminado)`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué problema resuelve el bus de eventos?",options:["Que el juego cargue más rápido","Que nodos lejanos se comuniquen sin conocerse ni buscarse en el árbol","Que no haya enemigos","Que la física sea mejor"],answer:1,explain:"Quien emite no sabe quién escucha. Podés agregar logros o estadísticas sin tocar al enemigo."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Conviene mandar TODO por el bus de eventos?",options:["Sí, siempre","No: para un padre y su hijo directo alcanza con una señal normal. El bus es para eventos de todo el juego","Sí, es más rápido","No se puede"],answer:1,explain:"Usado para todo, después no sabés quién escucha qué. Reservalo para eventos globales."}
+ ]},
+ {id:"k4",title:"Grupos",sub:"Encontrar y avisar a muchos nodos a la vez",xp:20,steps:[
+  {type:"info",kicker:"Concepto",title:"Etiquetas para nodos",html:`<p>Un <b>grupo</b> es una etiqueta. Se pone desde el Inspector (Nodo → Grupos) o con <code class="i">add_to_group("enemigos")</code>.</p>
+   <pre class="code">${hl(`# cuántos quedan\nvar quedan := get_tree().get_nodes_in_group("enemigos").size()\n\n# avisar a todos: llama a alerta() en cada uno\nget_tree().call_group("enemigos", "alerta", jugador.position)\n\n# preguntar si un nodo es de un grupo\nif body.is_in_group("jugador"):\n\tpass`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"Sonó la alarma de la base y todos los guardias tienen que ir a tu última posición. ¿Qué usás?",options:["get_tree().call_group(\"guardias\", \"ir_a\", posicion)","Un for sobre todos los nodos del juego","queue_free()","Un setter"],answer:0,explain:"call_group llama a esa función en todos los nodos del grupo."}
+ ]},
+ {id:"k5",title:"Object pooling",sub:"Reusar balas en vez de crearlas y borrarlas",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"No tirar, reciclar",html:`<p>Una ametralladora dispara 10 balas por segundo. Crear y borrar nodos tan seguido puede dar tirones. Un <b>pool</b> crea un montón de balas al principio y las <b>reusa</b>: cuando una termina, se esconde y queda lista para el próximo disparo.</p>
+   <pre class="code">${hl(`const ESCENA_BALA := preload("res://armas/bala.tscn")\nvar libres: Array[Node3D] = []\n\nfunc _ready():\n\tfor i in 50:\n\t\tvar b: Node3D = ESCENA_BALA.instantiate()\n\t\tb.hide()\n\t\tadd_child(b)\n\t\tlibres.append(b)\n\nfunc pedir_bala() -> Node3D:\n\tif libres.is_empty():\n\t\treturn null   # o crear una más\n\tvar b: Node3D = libres.pop_back()\n\tb.show()\n\treturn b\n\nfunc devolver_bala(b: Node3D):\n\tb.hide()\n\tlibres.append(b)`)}</pre>
+   <p>En la mayoría de los juegos chicos no hace falta. Usalo cuando el Profiler te muestre tirones por crear muchos objetos.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"Con el pool, ¿qué se hace en lugar de queue_free() cuando la bala termina?",options:["Se la esconde y se la devuelve a la lista de libres","Se la borra igual","Se la duplica","Nada"],answer:0,explain:"La bala no se destruye: vuelve al pool para el próximo disparo."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace pop_back()?",options:["Saca el último elemento del array y lo devuelve","Agrega al final","Ordena","Borra todo"],answer:0,explain:"pop_back quita y devuelve el último. append agrega al final."}
+ ]},
+ {id:"k6",title:"Guardar la partida en JSON",sub:"FileAccess, JSON y user://",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Una foto del estado del juego",html:`<p>Para guardar la partida completa (posición, vida, inventario, misión) se arma un <b>diccionario</b> con todo y se escribe como texto JSON en <code class="i">user://</code>.</p>
+   <pre class="code">${hl(GUARDAR_JSON_GD)}</pre>
+   <p>JSON no sabe guardar Vector3, por eso la posición va como lista de tres números. Al cargar, la convertís de nuevo con <code class="i">Vector3(p[0], p[1], p[2])</code>.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué cargar() revisa FileAccess.file_exists antes de abrir?",options:["Por estética","La primera vez que se juega todavía no hay partida guardada, y abrir un archivo que no existe da error","Para que cargue más rápido","No hace falta"],answer:1,explain:"Siempre hay que contemplar la primera vez y los archivos dañados."},
+  {type:"fill",kicker:"Completá",q:"Convertir el diccionario en texto JSON:",code:`archivo.store_string(JSON.____(datos))`,options:["stringify","parse_string","save","encode"],answer:0,explain:"stringify convierte a texto. parse_string hace lo contrario: de texto a datos."}
+ ]}
+];
+
+const GDS5=[
+ {id:"n1",title:"Vectores sin miedo",sub:"Posición, dirección y distancia",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Una flecha en 3D",html:`<p>Un <code class="i">Vector3</code> puede ser un <b>punto</b> (dónde está algo) o una <b>flecha</b> (hacia dónde y cuánto). Las operaciones más usadas:</p>
+   <pre class="code">${hl(`var desde := Vector3(0, 0, 0)\nvar hasta := Vector3(3, 0, 4)\n\nvar flecha := hasta - desde            # (3, 0, 4): de 'desde' a 'hasta'\nvar largo := flecha.length()           # 5: la distancia\nvar dir := flecha.normalized()         # (0.6, 0, 0.8): solo la dirección, largo 1\nvar d := desde.distance_to(hasta)       # 5, en un paso\nvar d2 := desde.direction_to(hasta)     # (0.6, 0, 0.8), en un paso`)}</pre>
+   <p>Regla de oro: <b>destino menos origen</b> da la flecha que va del origen al destino.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"El enemigo está en (2, 0, 2) y el jugador en (5, 0, 6). ¿Cuál es la flecha del enemigo al jugador?",options:["(3, 0, 4)","(-3, 0, -4)","(7, 0, 8)","(5, 0, 6)"],answer:0,explain:"Destino menos origen: (5-2, 0-0, 6-2) = (3, 0, 4). Su largo es 5."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve normalized()?",options:["Para que la flecha mida 1 y quede solo la dirección","Para duplicarla","Para que apunte al revés","Para redondear"],answer:0,explain:"Con la dirección de largo 1 multiplicás por la velocidad que quieras, y nadie va más rápido por estar lejos."},
+  {type:"fill",kicker:"Completá",q:"Distancia del jugador al objetivo:",code:`var d := jugador.global_position.____(objetivo.global_position)`,options:["distance_to","direction_to","dot","length"],answer:0,explain:"distance_to devuelve un número: los metros entre los dos puntos."}
+ ]},
+ {id:"n2",title:"Producto punto: el cono de visión",sub:"dot para saber si algo está adelante",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"¿Me está mirando?",html:`<p>El <b>producto punto</b> (<code class="i">a.dot(b)</code>) entre dos direcciones de largo 1 dice cuánto apuntan para el mismo lado:</p>
+   <ul><li><b>1</b>: misma dirección (justo adelante).</li><li><b>0</b>: perpendiculares (al costado).</li><li><b>-1</b>: opuestas (justo atrás).</li></ul>
+   <p>En Godot, el frente de un nodo 3D es <code class="i">-transform.basis.z</code>. Si <code class="i">adelante.dot(hacia_jugador)</code> es mayor que el coseno de la mitad del ángulo de visión, el jugador está dentro del cono.</p>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Entrá en el cono del guardia",html:`<p>El guardia gira la cabeza de un lado a otro. Movete con <b>WASD</b>: cuando quedás dentro del cono y cerca, se pone rojo. Probá <b>angulo_vision</b> 30 (visión de túnel) y 360 (te ve por todos lados).</p>`,lab:"vision"},
+  {type:"quiz",kicker:"Pregunta",q:"adelante.dot(hacia_jugador) da -0.9. ¿Dónde está el jugador?",options:["Justo adelante","Casi justo detrás del guardia","Al costado","Arriba"],answer:1,explain:"Cerca de -1 significa direcciones opuestas: está a sus espaldas. Ideal para un ataque sigiloso."},
+  {type:"fill",kicker:"Completá",q:"La dirección hacia adelante de un nodo 3D:",code:`var adelante := -global_transform.basis.____`,options:["z","x","y","w"],answer:0,explain:"En Godot, los nodos miran hacia -Z. Por eso va el signo menos."}
+ ]},
+ {id:"n3",title:"Girar hacia algo",sub:"look_at, atan2 y lerp_angle",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Apuntar suave",html:`<p><code class="i">look_at(objetivo, Vector3.UP)</code> gira el nodo para que mire al objetivo <b>de golpe</b>. Para una torreta o un enemigo que gira de a poco, se calcula el ángulo y se interpola:</p>
+   <pre class="code">${hl(`var dir := global_position.direction_to(objetivo)\nvar angulo := atan2(-dir.x, -dir.z)\nrotation.y = lerp_angle(rotation.y, angulo, delta * velocidad_giro)`)}</pre>
+   <p><code class="i">lerp_angle</code> es como lerp pero entiende los ángulos: sabe que de 350° a 10° conviene girar 20° y no 340°.</p>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Esquivá la torreta",html:`<p>Corré en círculos alrededor de la torreta con <b>WASD</b>. Con <b>velocidad_giro</b> 1 no te alcanza a seguir. Con 15 te sigue al instante. Dispara cuando le falta girar menos de 6°.</p>`,lab:"torreta"},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué usar lerp_angle y no lerp común para rotaciones?",options:["Es lo mismo","lerp_angle toma el camino corto: de 350° a 10° gira 20° en vez de dar casi una vuelta entera","lerp_angle es más lento","lerp no existe"],answer:1,explain:"Con lerp común, al cruzar los 360° la torreta daría una vuelta completa al revés."}
+ ]},
+ {id:"n4",title:"Interpolar y suavizar",sub:"lerp, move_toward y suavizado de cámara",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Llegar de a poco",html:`<ul><li><code class="i">lerp(a, b, t)</code>: un valor entre a y b. Usado cada frame con <code class="i">delta * k</code>, se acerca rápido al principio y lento al final. Queda suave, como una cámara que sigue.</li>
+   <li><code class="i">move_toward(a, b, paso)</code>: se acerca a velocidad <b>constante</b> y frena justo en b. Ideal para acelerar un auto o abrir una puerta.</li>
+   <li><code class="i">Vector3.lerp</code> y <code class="i">Vector3.move_toward</code>: lo mismo pero con posiciones.</li></ul>
+   <pre class="code">${hl(`# cámara de tercera persona que sigue con retraso\ncamara.global_position = camara.global_position.lerp(punto_detras_del_auto, delta * 5)\n\n# acelerar un auto de forma pareja\nvelocidad = move_toward(velocidad, velocidad_max, aceleracion * delta)`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"Querés que un auto acelere de 0 a 100 de forma pareja, siempre igual. ¿Qué usás?",options:["move_toward","lerp","look_at","dot"],answer:0,explain:"move_toward suma un paso fijo cada frame. lerp frenaría al acercarse a 100."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué da lerp(0, 10, 0.5)?",options:["0","5","10","0.5"],answer:1,explain:"t = 0.5 es justo la mitad entre 0 y 10."}
+ ]},
+ {id:"n5",title:"Rayos por código",sub:"intersect_ray para línea de visión",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"¿Hay una pared en el medio?",html:`<p>El cono de visión dice si el jugador está adelante, pero no si hay una pared entre los dos. Para eso se tira un rayo por código, sin necesidad de un nodo RayCast3D:</p>
+   <pre class="code">${hl(RAYO_CODIGO_GD)}</pre>
+   <p>El resultado es un diccionario con <code class="i">position</code>, <code class="i">normal</code> y <code class="i">collider</code>. Si está vacío, el rayo no chocó con nada.</p>
+   <p>Juntando el cono (lección 2) y el rayo, tu guardia ve de verdad: adelante, cerca y sin paredes en el medio.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué se pone consulta.exclude = [get_rid()]?",options:["Para que el rayo no choque con el propio guardia que lo dispara","Para que sea más largo","Para ignorar al jugador","No hace nada"],answer:0,explain:"El rayo sale desde adentro del guardia. Sin excluirlo, chocaría con su propio cuerpo."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Cuándo conviene un rayo por código en vez de un nodo RayCast3D?",options:["Nunca","Cuando necesitás rayos en direcciones que cambian, o muchos rayos en el mismo frame","Siempre","Para la música"],answer:1,explain:"El nodo es cómodo para un rayo fijo, como la mira del arma. Por código es más flexible."}
+ ]}
+];
+
+const GDS6=[
+ {id:"q1",title:"Medir antes de optimizar",sub:"Profiler y Monitores",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"No adivines: medí",html:`<p>Antes de cambiar código "para que ande más rápido", medí dónde se va el tiempo. En el panel <b>Depurador</b>, con el juego corriendo:</p>
+   <ul><li><b>Profiler</b>: cuánto tarda cada función por frame. Lo que esté arriba es lo que hay que mirar.</li>
+   <li><b>Monitores</b>: FPS, memoria, cantidad de objetos y de nodos, llamadas de dibujo.</li>
+   <li><b>Visual Profiler</b>: cuánto tarda la placa de video en cada parte del dibujo.</li></ul>
+   <p>Para estar fluido a 60 FPS, cada frame tiene que durar menos de 16.6 milisegundos.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"El juego va lento. ¿Qué hacés primero?",options:["Reescribir todo en otro lenguaje","Abrir el Profiler y ver qué función tarda más","Borrar los árboles","Bajar el volumen"],answer:1,explain:"Optimizar sin medir suele mejorar lo que no importa."},
+  {type:"quiz",kicker:"Pregunta",q:"Para 60 FPS, ¿cuánto puede durar como máximo cada frame?",options:["60 ms","16.6 ms","1 segundo","100 ms"],answer:1,explain:"1000 ms dividido 60 frames da unos 16.6 ms por frame."}
+ ]},
+ {id:"q2",title:"Código que no traba",sub:"Errores comunes de rendimiento",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Lo que se ejecuta 60 veces por segundo",html:`<p>Lo que va en <code class="i">_process</code> corre en cada frame. Pequeños descuidos se multiplican:</p>
+   <ul><li><b>Buscar nodos en cada frame</b>: <code class="i">get_node()</code> o <code class="i">$</code> dentro de _process. Guardalos una vez con <code class="i">@onready</code>.</li>
+   <li><b>Recorrer todos los enemigos en cada frame</b> para algo que puede esperar. Usá un <code class="i">Timer</code> cada 0.2 s.</li>
+   <li><b>Crear objetos en cada frame</b>, como <code class="i">FastNoiseLite.new()</code> o arrays grandes. Crealos una vez y reusalos.</li>
+   <li><b>Apagar lo que no se usa</b>: <code class="i">set_process(false)</code> en enemigos lejanos o dormidos.</li></ul>
+   <pre class="code">${hl(`# mal: busca el nodo 60 veces por segundo\nfunc _process(delta):\n\t$Cabeza/Camera3D.fov = 75\n\n# bien: lo busca una vez\n@onready var camara: Camera3D = $Cabeza/Camera3D`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"Un enemigo revisa cada frame si ve al jugador, con un rayo. Hay 40 enemigos. ¿Qué mejora más?",options:["Revisar con un Timer cada 0.2 s en vez de cada frame","Cambiar el color del enemigo","Usar print()","Nada"],answer:0,explain:"De 60 revisiones por segundo pasás a 5, y el jugador no nota la diferencia."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace set_process(false)?",options:["Borra el nodo","Deja de llamar a _process en ese nodo hasta que lo vuelvas a activar","Pausa el juego","Lo esconde"],answer:1,explain:"Ideal para cosas lejanas o inactivas que no necesitan pensar cada frame."}
+ ]},
+ {id:"q3",title:"call_deferred y el orden de las cosas",sub:"Cambiar el árbol en el momento seguro",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Esperar al final del frame",html:`<p>Algunos cambios no se pueden hacer mientras Godot está calculando la física, por ejemplo agregar o sacar cuerpos dentro de una señal de colisión. Godot avisa con un error del tipo "can't change this state while flushing queries".</p>
+   <p>La solución es pedir que se haga <b>al final del frame</b>, cuando es seguro:</p>
+   <pre class="code">${hl(`func _on_body_entered(body):\n\t# en vez de add_child(explosion):\n\tadd_child.call_deferred(explosion)\n\t# o desactivar una colisión:\n\t$CollisionShape3D.set_deferred("disabled", true)`)}</pre>
+   <p><code class="i">queue_free()</code> ya funciona así: borra el nodo al final del frame, de forma segura.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace algo.call_deferred()?",options:["Lo llama ahora mismo","Lo llama al final del frame, cuando es seguro cambiar el árbol","Nunca lo llama","Lo llama dos veces"],answer:1,explain:"Deferred significa diferido: se hace un poquito después, en un momento seguro."}
+ ]},
+ {id:"q4",title:"Organizar el proyecto y Git",sub:"Carpetas, nombres y control de versiones",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Un proyecto que crece sin volverse un lío",html:`<div class="tree"><span class="t">res://</span>
+├─ <span class="t">jugador/</span>      <span class="m">jugador.tscn, jugador.gd</span>
+├─ <span class="t">armas/</span>        <span class="m">arma.gd, rifle.tres, escopeta.tres</span>
+├─ <span class="t">enemigos/</span>
+├─ <span class="t">vehiculos/</span>
+├─ <span class="t">niveles/</span>
+├─ <span class="t">ui/</span>           <span class="m">menu, hud</span>
+├─ <span class="t">globales/</span>     <span class="m">eventos.gd, gestor_misiones.gd</span>
+└─ <span class="t">recursos/</span>     <span class="m">modelos, texturas, sonidos</span></div>
+   <ul><li>Cada cosa junto a su escena y su script.</li>
+   <li>Nombres de archivo en <code class="i">minusculas_con_guion_bajo</code>. Nodos en <code class="i">PascalCase</code>.</li>
+   <li><b>Git</b>, como hacés con Aprende Godot Burro: un commit por cada cambio que funciona. Si rompés algo, volvés atrás.</li>
+   <li>En el <code class="i">.gitignore</code> va la carpeta <code class="i">.godot/</code>, porque Godot la regenera sola y no hay que subirla.</li></ul>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué carpeta de un proyecto Godot 4 NO se sube a Git?",options:[".godot/","jugador/","niveles/","res://"],answer:0,explain:".godot/ es caché que Godot regenera al abrir el proyecto. Subirla solo trae conflictos."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Cada cuánto conviene hacer un commit?",options:["Una vez al terminar el juego","Cada vez que algo nuevo funciona: un paso chico y probado","Nunca","Cada un año"],answer:1,explain:"Commits chicos y frecuentes: si algo se rompe, sabés exactamente qué cambio fue."}
+ ]},
+ {id:"q5",title:"Exportar tu juego",sub:"Windows, Android y Web",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Del editor a un juego que cualquiera abre",html:`<ol><li><b>Editor → Administrar plantillas de exportación</b>: descargá las plantillas de tu versión de Godot (una vez).</li>
+   <li><b>Proyecto → Exportar → Añadir…</b>: elegí la plataforma (Windows Desktop, Android, Web, Linux).</li>
+   <li>Configurá el nombre, el ícono y la versión. En Android hacen falta el SDK de Android y un keystore para firmar.</li>
+   <li><b>Exportar proyecto</b>: con la casilla <b>Exportar con depuración</b> apagada para la versión final.</li></ol>
+   <p>Antes de publicar, probá el juego exportado en una computadora que no tenga Godot instalado. Lo que guardás en <code class="i">user://</code> funciona igual, pero <code class="i">res://</code> pasa a ser de solo lectura.</p>
+   <p>Si tu juego sale para PC y celular, conviene una escena de opciones de gráficos: en celular bajás sombras, distancia de dibujo y vegetación.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hay que descargar una sola vez antes de exportar?",options:["Las plantillas de exportación de tu versión de Godot","Un antivirus","Otro motor","Nada"],answer:0,explain:"Las plantillas son las versiones del motor para cada plataforma. Tienen que coincidir con tu versión de Godot."},
+  {type:"quiz",kicker:"Repaso final",q:"¿Cuál es el orden sano para trabajar en un juego?",options:["Optimizar desde el día uno","Prototipo que funcione → que sea divertido → ordenar el código → medir y optimizar → exportar y probar","Exportar antes de programar","Hacer los gráficos finales primero"],answer:1,explain:"Primero que funcione y sea divertido. Después prolijo y rápido."},
+  {type:"info",kicker:"¡Camino completo!",title:"GDScript, de 0 a profesional",html:`<p>Completaste el camino entero: desde qué es una instrucción hasta exportar un juego optimizado. Tenés todo lo necesario para leer cualquier proyecto de Godot y hacer el tuyo con vehículos, misiones y mundo abierto.</p><p>De acá en adelante, lo que más te va a hacer crecer es <b>terminar proyectos chicos</b> y leer el código de otros. ¡A programar, burro!</p>`}
+ ]}
+];
 
 const COURSES={
  cero:{key:"cero",next:"gds",tag:"GDScript · Nivel 0",title:"De 0 en programación",sub:"Lo más básico de lo básico: qué es una instrucción, un script, una función, qué es _ready() y qué es una variable.",lessons:CERO},
  gds:{key:"gds",next:"gds2",tag:"GDScript · Nivel 1",title:"GDScript para juegos 3D",sub:"Variables, funciones, movimiento, teclado y física con ejemplos de juegos 3D.",lessons:GDS},
- gds2:{key:"gds2",next:"menu",tag:"GDScript · Nivel 2",title:"GDScript intermedio",sub:"Tipos estáticos, diccionarios, enum y match, máquinas de estados, herencia, recursos propios y depuración.",lessons:GDS2},
+ gds2:{key:"gds2",next:"gds3",tag:"GDScript · Nivel 2",title:"GDScript intermedio",sub:"Tipos estáticos, diccionarios, enum y match, máquinas de estados, herencia, recursos propios y depuración.",lessons:GDS2},
+ gds3:{key:"gds3",next:"gds4",tag:"GDScript · Nivel 3",title:"GDScript avanzado",sub:"Señales propias y await, lambdas y Callable, setters y getters, arrays tipados, funciones estáticas y scripts @tool.",lessons:GDS3},
+ gds4:{key:"gds4",next:"gds5",tag:"GDScript · Nivel 4",title:"Arquitectura de juego",sub:"Instanciar escenas, componentes, bus de eventos, grupos, object pooling y guardar la partida en JSON.",lessons:GDS4},
+ gds5:{key:"gds5",next:"gds6",tag:"GDScript · Nivel 5",title:"Matemática 3D para juegos",sub:"Vectores, producto punto y cono de visión, girar hacia objetivos, interpolar y rayos por código.",lessons:GDS5},
+ gds6:{key:"gds6",next:"menu",tag:"GDScript · Nivel 6",title:"GDScript profesional",sub:"Medir y optimizar, código que no traba, call_deferred, organizar el proyecto con Git y exportar el juego.",lessons:GDS6},
  menu:{key:"menu",next:"fps2",tag:"Curso FPS 3D · Unidad 1",title:"El menú principal",sub:"Menú plano, menú con fondo 3D cinematográfico, opciones y transición al nivel.",lessons:LESSONS},
  fps2:{key:"fps2",next:"fps3",tag:"Curso FPS 3D · Unidad 2",title:"El jugador",sub:"La escena del jugador, Mapa de entrada, mirar con el mouse, caminar, saltar, correr y agacharse.",lessons:FPS2},
  fps3:{key:"fps3",next:"mis",tag:"Curso FPS 3D · Unidad 3",title:"Armas y disparo",sub:"El arma en la escena, disparo con RayCast3D, cadencia, munición, recarga, retroceso y dianas con vida.",lessons:FPS3},
