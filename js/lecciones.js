@@ -1231,6 +1231,225 @@ const MIS=[
   {type:"info",kicker:"¡Unidad completa!",title:"Ya tenés misiones",html:`<p>Ya sabés armar misiones con objetivos en orden, zonas, objetivos contra reloj, HUD y guardado. En las próximas unidades vas a sumar vehículos (autos, aviones y tanques) y a usarlos dentro de estas mismas misiones: "llegá a la base en el jeep", "destruí 3 tanques", "aterrizá en la pista".</p>`}
  ]}
 ];
+/* =================== curso FPS 3D · Unidad 5: mapas y mundo abierto =================== */
+const BOSQUE_GD = `extends MultiMeshInstance3D
+
+@export var cantidad := 2000
+@export var tamanio_mapa := 120.0
+@export var nivel_agua := 1.0
+@export var terreno: Node3D   # el que sabe la altura de cada punto
+
+func _ready():
+	multimesh.instance_count = cantidad
+	var colocados := 0
+	for i in range(cantidad):
+		var x := randf_range(-tamanio_mapa / 2, tamanio_mapa / 2)
+		var z := randf_range(-tamanio_mapa / 2, tamanio_mapa / 2)
+		var y: float = terreno.altura_en(x, z)
+		if y < nivel_agua:
+			continue   # no plantar árboles en el agua
+		var t := Transform3D()
+		t = t.rotated(Vector3.UP, randf() * TAU)
+		t = t.scaled(Vector3.ONE * randf_range(0.7, 1.4))
+		t.origin = Vector3(x, y, z)
+		multimesh.set_instance_transform(colocados, t)
+		colocados += 1
+	multimesh.visible_instance_count = colocados`;
+
+const ZONAS_GD = `# cargador_zonas.gd: carga la próxima zona sin congelar el juego
+var ruta_siguiente := "res://zonas/aldea.tscn"
+
+func empezar_carga():
+	ResourceLoader.load_threaded_request(ruta_siguiente)
+
+func _process(delta):
+	var estado := ResourceLoader.load_threaded_get_status(ruta_siguiente)
+	if estado == ResourceLoader.THREAD_LOAD_LOADED:
+		var escena: PackedScene = ResourceLoader.load_threaded_get(ruta_siguiente)
+		get_tree().change_scene_to_packed(escena)`;
+
+Object.assign(LABS,{
+ terreno:{code:`extends Node3D
+# genera un heightmap con ruido
+
+@export var semilla := __s__
+@export var frecuencia := __f__
+@export var altura_max := __a__
+
+func altura_en(x: float, z: float) -> float:
+	var ruido := FastNoiseLite.new()
+	ruido.seed = semilla
+	ruido.frequency = frecuencia
+	ruido.fractal_octaves = 4
+	# get_noise_2d devuelve de -1 a 1
+	return (ruido.get_noise_2d(x, z) + 1.0) / 2.0 * altura_max`,
+  params:{s:{val:7,min:0,max:999,step:1},f:{val:0.02,min:0.003,max:0.08,step:0.001},a:{val:18,min:0,max:45,step:1}},map:"terreno",
+  hint:"Arrastrá para girar la vista. Cambiá la semilla para otro mapa."},
+ bosque:{code:`extends MultiMeshInstance3D
+
+@export var cantidad := __n__
+@export var nivel_agua := __w__
+
+func _ready():
+	multimesh.instance_count = cantidad
+	for i in range(cantidad):
+		var x := randf_range(-60, 60)
+		var z := randf_range(-60, 60)
+		var y: float = terreno.altura_en(x, z)
+		if y < nivel_agua:
+			continue
+		# ... rotación y escala al azar, después:
+		multimesh.set_instance_transform(i, t)`,
+  params:{n:{val:1500,min:0,max:6000,step:100},w:{val:2,min:0,max:15,step:0.5}},map:"bosque",
+  hint:"Arrastrá para girar. Subí el agua y mirá cómo desaparecen árboles."},
+ clima:{code:`extends Node3D
+# Dentro del WorldEnvironment y la luz del sol
+
+@onready var entorno: Environment = $WorldEnvironment.environment
+@onready var sol: DirectionalLight3D = $Sol
+
+func _ready():
+	sol.rotation_degrees.x = -__h__      # altura del sol en grados
+	entorno.fog_enabled = true
+	entorno.fog_density = __d__
+	entorno.volumetric_fog_enabled = true`,
+  params:{h:{val:12,min:-10,max:80,step:1},d:{val:0.02,min:0,max:0.12,step:0.005}},map:"clima",
+  hint:"Probá el sol en 3° con niebla 0.06: amanecer en el bosque."}
+});
+
+function valueNoise(seed){
+  const h=(x,y)=>{let n=x*374761393+y*668265263+seed*1442695041;n=(n^(n>>>13))*1274126177;n=n^(n>>>16);return (n&0xffff)/0xffff};
+  const sm=t=>t*t*(3-2*t);
+  const n2=(x,y)=>{const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const a=h(xi,yi),b=h(xi+1,yi),c=h(xi,yi+1),d=h(xi+1,yi+1),u=sm(xf),v=sm(yf);
+    return (a+(b-a)*u)+((c+(d-c)*u)-(a+(b-a)*u))*v};
+  return (x,y,f)=>{let s=0,amp=1,tot=0,fr=f;for(let o=0;o<4;o++){s+=n2(x*fr,y*fr)*amp;tot+=amp;amp*=.5;fr*=2}return s/tot};
+}
+
+function buildMapLab(def,p,readout){
+  const T=THREE,mode=def.map,scene=new T.Scene();
+  const cam=new T.PerspectiveCamera(55,16/9,.5,600);
+  const hemi=new T.HemisphereLight(0xdfe8f0,0x3b4434,.7);scene.add(hemi);
+  const sun=new T.DirectionalLight(0xffffff,1);scene.add(sun);
+  const SIZE=120,SEG=90;
+  const geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);
+  const cols=new Float32Array(geo.attributes.position.count*3);geo.setAttribute("color",new T.BufferAttribute(cols,3));
+  const terr=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,flatShading:true,roughness:1}));scene.add(terr);
+  const water=new T.Mesh(new T.PlaneGeometry(SIZE*1.4,SIZE*1.4),new T.MeshStandardMaterial({color:0x3e6a86,transparent:true,opacity:.82,roughness:.3}));water.rotation.x=-Math.PI/2;scene.add(water);
+  const S={seed:7,f:.02,a:18,water:2,hfn:null,min:0,max:0};
+  if(mode!=="terreno"){S.seed=7;S.f=.02;S.a=18}
+  const C=(r,g,b)=>new T.Color(r,g,b);
+  const cWater=C(.55,.5,.38),cGrass=C(.33,.42,.24),cDark=C(.22,.3,.18),cRock=C(.42,.41,.39),cSnow=C(.92,.93,.95);
+  function regenTerrain(){
+    const nz=valueNoise(Math.round(S.seed)),pos=geo.attributes.position;S.min=1e9;S.max=-1e9;
+    S.hfn=(x,z)=>Math.max(0,Math.min(1,(nz(x+500,z+500,S.f)-.2)/.6))*S.a;
+    for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);let y=S.hfn(x,z);
+      const edge=Math.max(Math.abs(x),Math.abs(z))/(SIZE/2);if(edge>.85)y*=1-(edge-.85)/.15*.6;
+      pos.setY(i,y);S.min=Math.min(S.min,y);S.max=Math.max(S.max,y);
+      const k=S.a>0?y/S.a:0,c=new T.Color();
+      if(y<S.water+.4)c.copy(cWater);else if(k<.45)c.copy(cGrass).lerp(cDark,k/.45);else if(k<.72)c.copy(cDark).lerp(cRock,(k-.45)/.27);else c.copy(cRock).lerp(cSnow,Math.min(1,(k-.72)/.15));
+      cols[i*3]=c.r;cols[i*3+1]=c.g;cols[i*3+2]=c.b}
+    pos.needsUpdate=true;geo.attributes.color.needsUpdate=true;geo.computeVertexNormals();water.position.y=S.water}
+  // bosque
+  const MAXT=6000,trunkG=new T.CylinderGeometry(.12,.18,1.2,5),leafG=new T.ConeGeometry(.9,3.2,6);leafG.translate(0,2.6,0);trunkG.translate(0,.6,0);
+  const trunks=new T.InstancedMesh(trunkG,new T.MeshStandardMaterial({color:0x5a4330,flatShading:true}),MAXT);
+  const leaves=new T.InstancedMesh(leafG,new T.MeshStandardMaterial({color:0x2f4a2c,flatShading:true}),MAXT);
+  trunks.count=0;leaves.count=0;if(mode!=="terreno"){scene.add(trunks);scene.add(leaves)}
+  let placed=0,skipped=0;
+  function scatter(n){let r=1234567;const rnd=()=>(r=(r*16807)%2147483647)/2147483647;
+    const m=new T.Matrix4(),q=new T.Quaternion(),e=new T.Euler(),sc=new T.Vector3(),ps=new T.Vector3();placed=0;skipped=0;
+    for(let i=0;i<n;i++){const x=(rnd()-.5)*SIZE*.92,z=(rnd()-.5)*SIZE*.92,y=S.hfn(x,z),k=S.a>0?y/S.a:0;
+      if(y<S.water+.3||k>.7){skipped++;continue}
+      e.set(0,rnd()*Math.PI*2,0);q.setFromEuler(e);const s=.7+rnd()*.7;sc.set(s,s*(.85+rnd()*.4),s);ps.set(x,y-.1,z);m.compose(ps,q,sc);
+      trunks.setMatrixAt(placed,m);leaves.setMatrixAt(placed,m);placed++}
+    trunks.count=placed;leaves.count=placed;trunks.instanceMatrix.needsUpdate=true;leaves.instanceMatrix.needsUpdate=true}
+  // clima
+  function sky(h,d){const t=Math.max(-10,Math.min(80,h));
+    const night=C(.04,.06,.12),dawn=C(.95,.62,.42),day=C(.62,.76,.9),col=new T.Color();
+    if(t<0)col.copy(night).lerp(dawn,(t+10)/10);else if(t<15)col.copy(dawn).lerp(day,t/15);else col.copy(day);
+    scene.background=col.clone();scene.fog=d>0?new T.FogExp2(col.clone().lerp(C(.75,.78,.8),.3),d):null;
+    const r=t*Math.PI/180;sun.position.set(Math.cos(r)*-80,Math.sin(r)*120+1,-40);
+    sun.intensity=Math.max(0,Math.min(1.1,(t+3)/12));sun.color.copy(t<12?C(1,.72,.5):C(1,.97,.9));hemi.intensity=.18+Math.max(0,Math.min(.6,(t+8)/30))}
+  const V={yaw:.6,pitch:.5,auto:true,drag:null};
+  const lab={scene,cam,keys:false,tick(){},rebuild(){}};
+  lab.rebuild=()=>{
+    if(mode==="terreno"){S.seed=p.s;S.f=p.f;S.a=p.a}
+    if(mode==="bosque")S.water=p.w;
+    regenTerrain();if(mode!=="terreno")scatter(Math.round(p.n??2500));
+    sky(mode==="clima"?p.h:35,mode==="clima"?p.d:.004)};
+  lab.bind=el=>{el.style.touchAction="none";el.style.cursor="grab";
+    el.addEventListener("pointerdown",e=>{V.drag={x:e.clientX,y:e.clientY};V.auto=false;try{el.setPointerCapture(e.pointerId)}catch(_){}});
+    el.addEventListener("pointermove",e=>{if(!V.drag)return;V.yaw-=(e.clientX-V.drag.x)*.006;V.pitch=Math.max(.12,Math.min(1.25,V.pitch+(e.clientY-V.drag.y)*.004));V.drag={x:e.clientX,y:e.clientY}});
+    ["pointerup","pointercancel"].forEach(ev=>el.addEventListener(ev,()=>V.drag=null))};
+  lab.tick=dt=>{if(V.auto)V.yaw+=dt*.12;const R=mode==="clima"?95:110;
+    cam.position.set(Math.sin(V.yaw)*Math.cos(V.pitch)*R,Math.sin(V.pitch)*R+5,Math.cos(V.yaw)*Math.cos(V.pitch)*R);cam.lookAt(0,4,0);
+    if(mode==="terreno")readout(`semilla = ${Math.round(p.s)}   frecuencia = ${p.f}   altura_max = ${p.a}\nalturas: mínima ${S.min.toFixed(1)} m · máxima ${S.max.toFixed(1)} m · ${geo.attributes.position.count} vértices`);
+    else if(mode==="bosque")readout(`árboles colocados: ${placed}   descartados (agua o cumbre): ${skipped}\nllamadas de dibujo con MultiMesh: 2   sin MultiMesh: ${placed*2}`);
+    else readout(`sol a ${p.h}° · ${p.h<0?"noche":p.h<8?"amanecer":p.h<20?"mañana":"mediodía"}\nfog_density = ${p.d}   se ve hasta ≈ ${p.d>0?Math.round(3/p.d)+" m":"el horizonte"}`)};
+  return lab;
+}
+
+const MAPA=[
+ {id:"p1",title:"Diseñar el mapa",sub:"Papel, puntos de interés y blockout",xp:20,steps:[
+  {type:"info",kicker:"Concepto",title:"Primero el plano, después el detalle",html:`<p>Los mapas de juegos como Road to Vostok se sienten reales porque cada lugar tiene un motivo: un puesto de control en el cruce de caminos, una aldea junto al río, un búnker escondido en el bosque. Antes de abrir Godot, dibujá el mapa en papel:</p>
+   <ul><li><b>Puntos de interés</b>: lugares que el jugador quiere visitar (botín, misiones, refugio).</li>
+   <li><b>Rutas</b>: caminos, senderos y ríos que los conectan. Que haya más de una forma de llegar.</li>
+   <li><b>Zonas de peligro</b>: lugares abiertos y expuestos frente a lugares con cobertura.</li>
+   <li><b>Límites naturales</b>: montañas, agua o alambrados para que el jugador no se salga del mapa.</li></ul>
+   <p>Después armás todo con cajas grises (<b>blockout</b>) y lo caminás con tu jugador FPS. Si es aburrido o muy grande con cajas, también lo va a ser con árboles lindos.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué es un blockout?",options:["El mapa terminado con texturas","Una versión del mapa hecha con formas simples para probar tamaños y recorridos antes de poner el detalle","Un error de Godot","Un tipo de luz"],answer:1,explain:"Con cajas grises probás distancias, escondites y tiempos de recorrido sin perder horas en detalles."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué conviene que haya más de un camino a cada punto de interés?",options:["Para gastar más memoria","Para que el jugador elija cómo acercarse: sigiloso por el bosque o rápido por la ruta","Porque Godot lo pide","No conviene"],answer:1,explain:"Las elecciones hacen que el mapa se sienta vivo y que cada partida sea distinta."}
+ ]},
+ {id:"p2",title:"Terreno con heightmap",sub:"Alturas con ruido: FastNoiseLite",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Un mapa de alturas",html:`<p>Un terreno es una malla gigante donde cada punto tiene una altura. Esas alturas se guardan en un <b>heightmap</b>: una imagen en blanco y negro donde blanco es alto y negro es bajo.</p>
+   <p>Para esculpir a mano se usa un plugin gratis de la AssetLib: <b>Terrain3D</b> o <b>HTerrain</b>. Pintás montañas con pincel y después texturas de pasto, tierra y roca.</p>
+   <p>Para empezar más rápido podés <b>generar</b> las alturas con ruido. <code class="i">FastNoiseLite</code> viene en Godot y da valores que suben y bajan suave, como colinas:</p>
+   <ul><li><b>semilla</b>: el mismo número da siempre el mismo mapa.</li>
+   <li><b>frecuencia</b>: baja da colinas anchas, alta da terreno picado.</li>
+   <li><b>octavas</b>: suman detalles chicos encima de las formas grandes.</li></ul>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Generá tu terreno",html:`<p>Cambiá la <b>semilla</b> para otro mapa, la <b>frecuencia</b> para colinas más anchas o más picadas y la <b>altura_max</b> para llanura o montaña. Los colores salen de la altura: pasto abajo, roca arriba y nieve en las cumbres.</p>`,lab:"terreno"},
+  {type:"quiz",kicker:"Pregunta",q:"Querés colinas anchas y suaves, como un campo nórdico. ¿Qué hacés con la frecuencia?",options:["La subo","La bajo","La dejo en 0","No importa"],answer:1,explain:"Frecuencia baja: las subidas y bajadas están más separadas."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve la semilla?",options:["Para plantar árboles","Para que el mismo número genere siempre el mismo terreno, y otro número uno distinto","Para el agua","Para la música"],answer:1,explain:"El ruido es pseudoaleatorio: con la misma semilla se repite exacto. Así todos los jugadores ven el mismo mapa."}
+ ]},
+ {id:"p3",title:"Bosques con MultiMesh",sub:"Miles de árboles sin trabar el juego",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Una sola orden para miles de árboles",html:`<p>Si ponés 3000 árboles como nodos separados, la placa de video recibe 3000 órdenes de dibujo por frame y el juego se traba. <code class="i">MultiMeshInstance3D</code> dibuja <b>todas las copias del mismo modelo en una sola orden</b>.</p>
+   <p>Cada copia solo guarda su <code class="i">Transform3D</code>: posición, rotación y escala. Con rotación y tamaño al azar, nadie nota que es el mismo pino.</p>
+   <pre class="code">${hl(BOSQUE_GD)}</pre>
+   <p>Para pintar vegetación a mano en el editor existen plugins como <b>ProtonScatter</b> o <b>Spatial Gardener</b>, que usan esta misma técnica.</p>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Plantá un bosque",html:`<p>Subí la <b>cantidad</b> a 6000 y mirá que siguen siendo 2 llamadas de dibujo (troncos y copas). Subí el <b>nivel_agua</b>: los árboles que quedarían bajo el agua no se plantan.</p>`,lab:"bosque"},
+  {type:"fill",kicker:"Completá",q:"Ubicar la copia número i:",code:`multimesh.____(i, t)`,options:["set_instance_transform","add_child","instantiate","set_position"],answer:0,explain:"set_instance_transform le da a la copia i su posición, rotación y escala."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué cada árbol recibe una rotación y escala al azar?",options:["Para que se caigan","Para que no se note que son copias del mismo modelo","Porque es obligatorio","Para que pesen menos"],answer:1,explain:"La variación rompe la repetición. Mezclar 3 o 4 modelos distintos ayuda todavía más."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace continue dentro del for?",options:["Termina el for","Saltea esa vuelta y pasa a la siguiente, sin plantar ese árbol","Repite la vuelta","Cierra el juego"],answer:1,explain:"continue salta al próximo i. break, en cambio, terminaría el for entero."}
+ ]},
+ {id:"p4",title:"Luz, niebla y hora del día",sub:"WorldEnvironment para el clima opresivo",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"La atmósfera hace el mapa",html:`<p>El mismo bosque puede verse alegre o amenazante solo cambiando la luz. En el <b>WorldEnvironment</b> y la <b>DirectionalLight3D</b> (el sol) se configura casi todo:</p>
+   <ul><li><b>Altura del sol</b>: bajo (amanecer, atardecer) da sombras largas y luz naranja.</li>
+   <li><b>Niebla</b> (<code class="i">fog_density</code>): esconde lo lejano, da profundidad y miedo a lo que no ves. Además ayuda al rendimiento, porque lo que no se ve no hace falta dibujarlo con detalle.</li>
+   <li><b>Niebla volumétrica</b>: los rayos de luz entre los árboles.</li>
+   <li><b>SDFGI</b>: la luz rebota en el terreno y las paredes.</li>
+   <li><b>Ajustes de color</b> (Adjustments): bajar la saturación da ese look frío de la zona fronteriza.</li></ul>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Cambiá el clima",html:`<p>Mové la <b>altura del sol</b> entre -10 (noche) y 80 (mediodía) y la <b>niebla</b> entre 0 y 0.12. Buscá la combinación más tensa para una misión de infiltración.</p>`,lab:"clima"},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué efecto da una niebla densa en un FPS?",options:["Más velocidad de disparo","Tensión: no ves quién está lejos. Y además ahorra trabajo de dibujo","Más munición","Ninguno"],answer:1,explain:"La niebla cambia cómo se juega: obliga a acercarse y moverse con cuidado."},
+  {type:"fill",kicker:"Completá",q:"Activar la niebla del entorno:",code:`entorno.____ = true`,options:["fog_enabled","fog_visible","niebla","fog_on"],answer:0,explain:"La propiedad es fog_enabled. La densidad se ajusta con fog_density."}
+ ]},
+ {id:"p5",title:"Rendimiento en mapas grandes",sub:"LOD, visibility range, occlusion y zonas",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Dibujar solo lo que hace falta",html:`<ul><li><b>LOD</b> (nivel de detalle): un árbol lejano se dibuja con menos triángulos. Godot 4 genera los LOD solo al importar los modelos.</li>
+   <li><b>Visibility Range</b> (en cada MeshInstance3D): a partir de cierta distancia el objeto deja de dibujarse. Ideal para piedritas y pasto.</li>
+   <li><b>Occlusion culling</b>: con un <code class="i">OccluderInstance3D</code>, Godot no dibuja lo que está detrás de una colina o de un edificio.</li>
+   <li><b>Zonas</b>: en vez de un mapa gigante, varias zonas conectadas. Al llegar al borde, se carga la siguiente en segundo plano.</li></ul>
+   <pre class="code">${hl(ZONAS_GD)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"Las piedritas del suelo se ven a 2 km y el juego anda lento. ¿Qué ajustás primero?",options:["El Visibility Range de las piedritas, para que no se dibujen lejos","La música","El tamaño de la ventana","El nombre del nodo"],answer:0,explain:"Visibility Range End corta el dibujo a partir de cierta distancia. Las piedritas lejanas no aportan nada."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve load_threaded_request?",options:["Para borrar escenas","Para cargar la próxima zona en segundo plano, sin congelar el juego","Para guardar la partida","Para disparar"],answer:1,explain:"La carga sigue mientras jugás. Cuando el estado es LOADED, cambiás de escena al instante."},
+  {type:"fill",kicker:"Completá",q:"Cambiar a una escena ya cargada:",code:`get_tree().____(escena)`,options:["change_scene_to_packed","change_scene_to_file","load","instantiate"],answer:0,explain:"change_scene_to_packed usa un PackedScene que ya tenés en memoria. change_scene_to_file recibe una ruta y carga en el momento."}
+ ]},
+ {id:"p6",title:"Repaso: tu primera zona",sub:"Lista de pasos para armar un mapa",xp:30,steps:[
+  {type:"info",kicker:"Receta",title:"Cómo armar tu primera zona",html:`<div class="flow"><div>1. Plano<small>papel: puntos de interés y rutas</small></div><b>→</b><div>2. Blockout<small>cajas grises, caminarlo</small></div><b>→</b><div>3. Terreno<small>Terrain3D o ruido</small></div></div>
+   <div class="flow"><div>4. Vegetación<small>MultiMesh con variación</small></div><b>→</b><div>5. Atmósfera<small>sol, niebla, color</small></div><b>→</b><div class="hot">6. Optimizar<small>LOD, rangos, oclusión</small></div></div>
+   <p>Para modelos, texturas y cielos realistas y gratuitos, <b>Poly Haven</b> tiene todo con licencia libre (CC0). Revisá siempre la licencia de cada recurso que uses.</p>`},
+  {type:"quiz",kicker:"Repaso",q:"¿En qué orden conviene trabajar?",options:["Detalles primero y después el plano","Plano, blockout, terreno, vegetación, atmósfera y optimización","Optimizar antes de tener nada","Da igual"],answer:1,explain:"Primero se prueba que el mapa sea divertido. El detalle y la optimización vienen después."},
+  {type:"quiz",kicker:"Repaso",q:"Tu bosque tiene 5000 pinos como nodos sueltos y el juego va a 15 FPS. ¿Qué cambiás?",options:["Los paso a un MultiMeshInstance3D","Subo la niebla a 0","Agrego más luces","Le saco el sonido"],answer:0,explain:"Con MultiMesh, los 5000 pinos pasan a ser una sola orden de dibujo."}
+ ]}
+];
 
 const COURSES={
  cero:{key:"cero",next:"gds",tag:"GDScript · Nivel 0",title:"De 0 en programación",sub:"Lo más básico de lo básico: qué es una instrucción, un script, una función, qué es _ready() y qué es una variable.",lessons:CERO},
@@ -1238,6 +1457,7 @@ const COURSES={
  menu:{key:"menu",next:"fps2",tag:"Curso FPS 3D · Unidad 1",title:"El menú principal",sub:"Menú plano, menú con fondo 3D cinematográfico, opciones y transición al nivel.",lessons:LESSONS},
  fps2:{key:"fps2",next:"fps3",tag:"Curso FPS 3D · Unidad 2",title:"El jugador",sub:"La escena del jugador, Mapa de entrada, mirar con el mouse, caminar, saltar, correr y agacharse.",lessons:FPS2},
  fps3:{key:"fps3",next:"mis",tag:"Curso FPS 3D · Unidad 3",title:"Armas y disparo",sub:"El arma en la escena, disparo con RayCast3D, cadencia, munición, recarga, retroceso y dianas con vida.",lessons:FPS3},
- mis:{key:"mis",tag:"Curso FPS 3D · Unidad 4",title:"Misiones",sub:"Objetivos en orden, zonas con Area3D, gestor de misiones, objetivos contra reloj, HUD y guardado del progreso.",lessons:MIS}
+ mis:{key:"mis",next:"mapa",tag:"Curso FPS 3D · Unidad 4",title:"Misiones",sub:"Objetivos en orden, zonas con Area3D, gestor de misiones, objetivos contra reloj, HUD y guardado del progreso.",lessons:MIS},
+ mapa:{key:"mapa",tag:"Curso FPS 3D · Unidad 5",title:"Mapas y mundo abierto",sub:"Diseño del mapa, terreno con heightmap y ruido, bosques con MultiMesh, luz y niebla, y rendimiento en mapas grandes.",lessons:MAPA}
 };
 
