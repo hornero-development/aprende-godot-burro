@@ -1450,10 +1450,191 @@ const MAPA=[
   {type:"quiz",kicker:"Repaso",q:"Tu bosque tiene 5000 pinos como nodos sueltos y el juego va a 15 FPS. ¿Qué cambiás?",options:["Los paso a un MultiMeshInstance3D","Subo la niebla a 0","Agrego más luces","Le saco el sonido"],answer:0,explain:"Con MultiMesh, los 5000 pinos pasan a ser una sola orden de dibujo."}
  ]}
 ];
+/* =================== GDScript · Nivel 2: intermedio =================== */
+const ARMA_BASE_GD = `# arma.gd
+class_name Arma
+extends Node3D
+
+@export var nombre := "Arma"
+@export var danio := 10
+var balas := 0
+
+func disparar():
+	if balas <= 0:
+		print(nombre, ": sin balas")
+		return
+	balas -= 1
+	print(nombre, " dispara y hace ", danio, " de daño")`;
+
+const ESCOPETA_GD = `# escopeta.gd
+class_name Escopeta
+extends Arma
+
+@export var perdigones := 8
+
+func disparar():
+	super()   # primero hace todo lo de Arma.disparar()
+	print("…y suelta ", perdigones, " perdigones")`;
+
+const DATOS_ARMA_GD = `# datos_arma.gd
+class_name DatosArma
+extends Resource
+
+@export var nombre := "Rifle"
+@export var danio := 34
+@export var cadencia := 0.12
+@export var cargador := 30
+@export var modelo: PackedScene
+@export var sonido: AudioStream`;
+
+Object.assign(LABS,{
+ estados:{code:`enum Estado { PATRULLA, PERSEGUIR, ATACAR }
+var estado := Estado.PATRULLA
+@export var distancia_vision := __v__
+@export var distancia_ataque := __a__
+
+func _physics_process(delta):
+	var d := global_position.distance_to(jugador.global_position)
+	match estado:
+		Estado.PATRULLA:
+			patrullar(delta)
+			if d < distancia_vision:
+				estado = Estado.PERSEGUIR
+		Estado.PERSEGUIR:
+			mover_hacia(jugador.global_position, delta)
+			if d < distancia_ataque:
+				estado = Estado.ATACAR
+			elif d > distancia_vision * 1.5:
+				estado = Estado.PATRULLA
+		Estado.ATACAR:
+			disparar()
+			if d > distancia_ataque:
+				estado = Estado.PERSEGUIR`,
+  params:{v:{val:6,min:1,max:12,step:0.5},a:{val:2.5,min:0.5,max:6,step:0.5}},fsm:true,keys:true,
+  pad:[["KeyW","W ↑"],["KeyA","A ←"],["KeyS","S ↓"],["KeyD","D →"]],
+  hint:"Sos el soldado azul: movete con WASD y acercate al enemigo."}
+});
+
+function buildFSMLab(def,p,readout){
+  const T=THREE,scene=new T.Scene();scene.background=new T.Color(0x1f2833);
+  const cam=new T.PerspectiveCamera(45,16/9,.1,200);cam.position.set(0,22,14);cam.lookAt(0,0,0);
+  scene.add(new T.HemisphereLight(0xffffff,0x334455,.9));const dl=new T.DirectionalLight(0xffffff,.6);dl.position.set(5,12,6);scene.add(dl);
+  const floor=new T.Mesh(new T.PlaneGeometry(30,22),new T.MeshStandardMaterial({color:0x4a5a3f}));floor.rotation.x=-Math.PI/2;scene.add(floor);
+  scene.add(new T.GridHelper(30,30,0x5c6b50,0x55644a));
+  const mk=c=>{const g=new T.Group(),m=new T.MeshStandardMaterial({color:c,flatShading:true});
+    const b=new T.Mesh(new T.CylinderGeometry(.45,.45,1.2,14),m);b.position.y=.6;g.add(b);
+    const nose=new T.Mesh(new T.BoxGeometry(.25,.25,.6),new T.MeshStandardMaterial({color:0x222222}));nose.position.set(0,1,-.5);g.add(nose);scene.add(g);return {g,m}};
+  const P=mk(0x4f9fe0),E=mk(0x41c283);P.g.position.set(-9,0,6);E.g.position.set(6,0,-4);
+  const ring=(c)=>{const r=new T.Mesh(new T.RingGeometry(.96,1,64),new T.MeshBasicMaterial({color:c,transparent:true,opacity:.6,side:T.DoubleSide}));r.rotation.x=-Math.PI/2;r.position.y=.03;scene.add(r);return r};
+  const rv=ring(0xe3a75b),ra=ring(0xe85a50);
+  const WP=[[6,-4],[10,4],[0,6],[-4,-5]];WP.forEach(([x,z])=>{const m=new T.Mesh(new T.CylinderGeometry(.15,.15,.05,10),new T.MeshBasicMaterial({color:0x8e9cb1}));m.position.set(x,.03,z);scene.add(m)});
+  const bullet=new T.Mesh(new T.SphereGeometry(.12,8,6),new T.MeshBasicMaterial({color:0xffd27a}));bullet.visible=false;scene.add(bullet);
+  const NAMES=["PATRULLA","PERSEGUIR","ATACAR"],COL=[0x41c283,0xe3a75b,0xe85a50];
+  const F={st:0,wp:1,cd:0,bt:0,log:["estado = PATRULLA"],hits:0};
+  const lab={scene,cam,keys:true,rebuild(){},tick(){}};
+  const moveTo=(g,x,z,sp,dt)=>{const dx=x-g.position.x,dz=z-g.position.z,d=Math.hypot(dx,dz);if(d<.01)return d;const s=Math.min(d,sp*dt);g.position.x+=dx/d*s;g.position.z+=dz/d*s;g.rotation.y=Math.atan2(-dx,-dz);return d};
+  lab.tick=dt=>{
+    let x=0,z=0;if(KEYS.has("KeyD")||KEYS.has("ArrowRight"))x+=1;if(KEYS.has("KeyA")||KEYS.has("ArrowLeft"))x-=1;if(KEYS.has("KeyS")||KEYS.has("ArrowDown"))z+=1;if(KEYS.has("KeyW")||KEYS.has("ArrowUp"))z-=1;
+    const l=Math.hypot(x,z)||1;P.g.position.x=Math.max(-14,Math.min(14,P.g.position.x+x/l*5*dt));P.g.position.z=Math.max(-10,Math.min(10,P.g.position.z+z/l*5*dt));if(x||z)P.g.rotation.y=Math.atan2(-x,-z);
+    const d=Math.hypot(P.g.position.x-E.g.position.x,P.g.position.z-E.g.position.z),prev=F.st;
+    if(F.st===0){const w=WP[F.wp];if(moveTo(E.g,w[0],w[1],2.2,dt)<.2)F.wp=(F.wp+1)%WP.length;if(d<p.v)F.st=1}
+    else if(F.st===1){moveTo(E.g,P.g.position.x,P.g.position.z,3.6,dt);if(d<p.a)F.st=2;else if(d>p.v*1.5)F.st=0}
+    else{E.g.rotation.y=Math.atan2(-(P.g.position.x-E.g.position.x),-(P.g.position.z-E.g.position.z));F.cd-=dt;
+      if(F.cd<=0){F.cd=.6;F.bt=.15;F.hits++;blip(180)}if(d>p.a)F.st=1}
+    if(F.st!==prev){F.log.unshift(`${NAMES[prev]} → ${NAMES[F.st]}  (d = ${d.toFixed(1)})`);F.log.length=Math.min(F.log.length,3);blip(F.st===2?300:F.st===1?600:450)}
+    E.m.color.setHex(COL[F.st]);
+    rv.position.x=ra.position.x=E.g.position.x;rv.position.z=ra.position.z=E.g.position.z;rv.scale.set(p.v,p.v,1);ra.scale.set(p.a,p.a,1);
+    if(F.bt>0){F.bt-=dt;bullet.visible=true;const k=1-F.bt/.15;bullet.position.set(E.g.position.x+(P.g.position.x-E.g.position.x)*k,1,E.g.position.z+(P.g.position.z-E.g.position.z)*k)}else bullet.visible=false;
+    readout(`estado = Estado.${NAMES[F.st]}   distancia = ${d.toFixed(1)}   disparos recibidos: ${F.hits}\n${F.log.join("\n")}`)};
+  return lab;
+}
+
+const GDS2=[
+ {id:"h1",title:"Tipos estáticos",sub:"Decirle a Godot qué guarda cada variable",xp:20,steps:[
+  {type:"info",kicker:"Concepto",title:"Avisar el tipo",html:`<p>Hasta ahora usaste <code class="i">:=</code> y Godot adivinaba el tipo. También podés escribirlo vos, con dos puntos:</p>
+   <pre class="code">${hl(`var vida: int = 100\nvar velocidad: float = 6.0\nvar nombre: String = "Cabo Burro"\nvar objetivo: Node3D\n\nfunc calcular_danio(base: int, critico: bool) -> int:\n\treturn base * 2 if critico else base`)}</pre>
+   <ul><li><code class="i">vida: int</code> dice que esa caja solo acepta números enteros.</li>
+   <li><code class="i">-&gt; int</code> después de los paréntesis dice qué devuelve la función. <code class="i">-&gt; void</code> significa que no devuelve nada.</li></ul>
+   <p>¿Para qué sirve? Godot te marca errores <b>antes</b> de jugar, el autocompletado funciona mejor y el código corre más rápido.</p>`},
+  {type:"quiz",kicker:"¿Qué pasa?",q:"¿Qué pasa con este código?",code:`var balas: int = 30\n\nfunc _ready():\n\tbalas = "muchas"`,options:["balas pasa a valer \"muchas\"","Godot marca error: balas es int y \"muchas\" es texto","Imprime 30","No pasa nada"],answer:1,explain:"Con el tipo escrito, Godot no deja guardar texto en una caja de números. Encontrás el error antes de jugar."},
+  {type:"fill",kicker:"Completá",q:"La función no devuelve nada:",code:`func recargar() -> ____:\n\tbalas = 30`,options:["void","null","int","nada"],answer:0,explain:"-> void indica que la función no tiene return con valor."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Cuál es la diferencia entre var x := 5 y var x: int = 5?",options:["Ninguna en el resultado: con := Godot deduce int y con : int lo escribís vos","La segunda es más lenta","La primera no se puede cambiar","La segunda es texto"],answer:0,explain:"Los dos quedan tipados como int. := es un atajo cuando el tipo es obvio por el valor."}
+ ]},
+ {id:"h2",title:"Diccionarios",sub:"Guardar datos con nombre: inventarios y estadísticas",xp:20,steps:[
+  {type:"info",kicker:"Concepto",title:"Cajas con etiqueta dentro de una caja",html:`<p>Un <b>Array</b> guarda cosas en orden: [0], [1], [2]. Un <b>Dictionary</b> guarda cosas con <b>nombre</b> (clave → valor). Es perfecto para un inventario:</p>
+   <pre class="code">${hl(`var inventario := {\n\t"balas_rifle": 90,\n\t"granadas": 2,\n\t"botiquines": 1,\n}\n\nfunc _ready():\n\tprint(inventario["granadas"])        # 2\n\tinventario["granadas"] -= 1\n\tinventario["llave_bunker"] = 1      # agrega una clave nueva\n\tif inventario.has("botiquines"):\n\t\tprint("Tenés botiquín")\n\tprint(inventario.get("raciones", 0))   # 0 si no existe\n\tfor objeto in inventario:\n\t\tprint(objeto, ": ", inventario[objeto])`)}</pre>`},
+  {type:"trace",kicker:"Paso a paso",title:"Usar el inventario",html:`<p>Mirá cómo cambian los valores del diccionario.</p>`,
+   code:`var inv := {"balas": 30, "granadas": 2}\n\nfunc _ready():\n\tinv["balas"] -= 5\n\tinv["botiquin"] = 1\n\tprint(inv.get("raciones", 0))\n\tprint(inv.size())`,
+   steps:[{line:0,say:"Se crea el diccionario con dos claves.",vars:{'inv["balas"]':"30",'inv["granadas"]':"2"}},
+    {line:2,say:"Godot llama a _ready."},{line:3,say:"Buscamos la clave balas y le restamos 5.",vars:{'inv["balas"]':"25"}},
+    {line:4,say:"botiquin no existía: al asignarla se crea.",vars:{'inv["botiquin"]':"1"}},
+    {line:5,say:"raciones no existe, así que get devuelve el valor por defecto: 0.",out:"0"},
+    {line:6,say:"size() cuenta las claves: balas, granadas y botiquin.",out:"3"}]},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué pasa con inventario[\"cohetes\"] si esa clave no existe?",options:["Devuelve 0","Da error: la clave no existe. Por eso conviene usar get(\"cohetes\", 0) o has()","Crea la clave","Devuelve \"cohetes\""],answer:1,explain:"Leer con corchetes una clave que no existe da error. get con valor por defecto es la forma segura."},
+  {type:"fill",kicker:"Completá",q:"¿Tiene la llave del búnker?",code:`if inventario.____("llave_bunker"):\n\tabrir_puerta()`,options:["has","get","size","find"],answer:0,explain:"has(clave) devuelve true si la clave está en el diccionario."}
+ ]},
+ {id:"h3",title:"enum y match",sub:"Nombres para opciones y elegir entre muchos caminos",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Opciones con nombre",html:`<p>Un <b>enum</b> crea una lista de opciones con nombre. Es mucho más claro que usar números sueltos:</p>
+   <pre class="code">${hl(`enum TipoArma { PISTOLA, RIFLE, ESCOPETA, FRANCOTIRADOR }\nvar arma_actual := TipoArma.RIFLE`)}</pre>
+   <p><code class="i">match</code> compara un valor con varias opciones y ejecuta solo la que coincide. Es como muchos <code class="i">if/elif</code>, pero más prolijo:</p>
+   <pre class="code">${hl(`match arma_actual:\n\tTipoArma.PISTOLA:\n\t\tdanio = 20\n\tTipoArma.RIFLE:\n\t\tdanio = 34\n\tTipoArma.ESCOPETA, TipoArma.FRANCOTIRADOR:\n\t\tdanio = 90\n\t_:\n\t\tdanio = 10   # cualquier otro caso`)}</pre>
+   <p><code class="i">_</code> es el comodín: se usa si ninguna opción coincidió.</p>`},
+  {type:"quiz",kicker:"¿Qué imprime?",q:"¿Qué imprime?",code:`enum Vehiculo { AUTO, AVION, TANQUE }\nvar v := Vehiculo.TANQUE\n\nfunc _ready():\n\tmatch v:\n\t\tVehiculo.AUTO:\n\t\t\tprint("4 ruedas")\n\t\tVehiculo.AVION:\n\t\t\tprint("alas")\n\t\t_:\n\t\t\tprint("orugas")`,options:["4 ruedas","alas","orugas","Nada"],answer:2,explain:"TANQUE no está en ninguna opción, así que entra al comodín _."},
+  {type:"quiz",kicker:"Pregunta",q:"Por dentro, ¿qué número vale Vehiculo.AVION?",options:["0","1","2","\"AVION\""],answer:1,explain:"Los enums numeran desde 0: AUTO = 0, AVION = 1, TANQUE = 2. Vos usás los nombres y te olvidás de los números."},
+  {type:"fill",kicker:"Completá",q:"El caso para cualquier otro valor:",code:`match estado:\n\tEstado.QUIETO:\n\t\tpass\n\t____:\n\t\tprint("otro estado")`,options:["_","else","default","*"],answer:0,explain:"En GDScript el comodín de match es el guion bajo."}
+ ]},
+ {id:"h4",title:"Máquina de estados",sub:"Cómo piensa un enemigo",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Un estado a la vez",html:`<p>Un enemigo de FPS hace cosas distintas según la situación: patrulla, te persigue, te dispara. Cada una es un <b>estado</b>, y el enemigo está en uno solo por vez. Con <code class="i">enum</code> nombrás los estados y con <code class="i">match</code> decidís qué hacer en cada uno.</p>
+   <div class="flow"><div>PATRULLA<small>recorre puntos</small></div><b>→</b><div>PERSEGUIR<small>te vio: d &lt; visión</small></div><b>→</b><div class="hot">ATACAR<small>d &lt; distancia de ataque</small></div></div>
+   <p>También se vuelve para atrás: si te alejás del alcance de ataque, vuelve a perseguir. Si te alejás mucho (1.5 veces la visión), te pierde y vuelve a patrullar.</p>
+   <p>Esto se llama <b>máquina de estados</b>, y la usan los enemigos, las armas, el jugador (caminar, correr, nadar) y los vehículos.</p>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Escapá del enemigo",html:`<p>Movete con <b>WASD</b>. El enemigo cambia de color según su estado: verde patrulla, amarillo persigue, rojo ataca. El aro naranja es su visión y el rojo su alcance de ataque. Probá una visión de 2 y escabullite por detrás.</p>`,lab:"estados"},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué el enemigo vuelve a patrullar recién cuando d > distancia_vision * 1.5, y no apenas d > distancia_vision?",options:["Por un error","Para que no cambie de estado a cada rato cuando estás justo en el borde de su visión","Para que corra más","No hay diferencia"],answer:1,explain:"Ese margen evita que titile entre PATRULLA y PERSEGUIR. Se llama histéresis."},
+  {type:"quiz",kicker:"Pregunta",q:"Querés agregar un estado HUIR cuando el enemigo tiene poca vida. ¿Qué hacés?",options:["Reescribir todo","Agregar HUIR al enum, un caso Estado.HUIR en el match y la condición para entrar (vida < 20)","Crear otro enemigo","No se puede"],answer:1,explain:"Las máquinas de estados crecen así: un nombre nuevo, su comportamiento y sus transiciones."}
+ ]},
+ {id:"h5",title:"Clases propias y herencia",sub:"class_name, extends y super()",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Un molde para todas las armas",html:`<p>Pistola, rifle y escopeta disparan, tienen balas y hacen daño. En vez de copiar el mismo código tres veces, creás una clase base <b>Arma</b> y las demás <b>heredan</b> de ella.</p>
+   <pre class="code">${hl(ARMA_BASE_GD)}</pre>
+   <p><code class="i">class_name Arma</code> registra el nombre en todo el proyecto. Ahora cualquier script puede hacer <code class="i">extends Arma</code>:</p>
+   <pre class="code">${hl(ESCOPETA_GD)}</pre>
+   <ul><li>La escopeta tiene todo lo de Arma (nombre, daño, balas, disparar) y además perdigones.</li>
+   <li>Al escribir su propio <code class="i">disparar()</code>, lo <b>reemplaza</b>.</li>
+   <li><code class="i">super()</code> llama a la versión del padre, para no perder lo que ya hacía.</li></ul>`},
+  {type:"trace",kicker:"Paso a paso",title:"La escopeta dispara",html:`<p>Una escopeta con 2 balas, 80 de daño y 8 perdigones llama a <code class="i">disparar()</code>.</p>`,
+   code:`# escopeta.gd\nfunc disparar():\n\tsuper()\n\tprint("…y suelta ", perdigones, " perdigones")\n\n# arma.gd (el padre)\nfunc disparar():\n\tif balas <= 0:\n\t\treturn\n\tbalas -= 1\n\tprint(nombre, " dispara y hace ", danio, " de daño")`,
+   steps:[{line:1,say:"Se llama al disparar() de Escopeta, porque reemplaza al del padre.",vars:{balas:"2"}},
+    {line:2,say:"super() salta a la versión de Arma."},{line:7,say:"¿balas <= 0? No, hay 2."},{line:9,say:"Resta una bala.",vars:{balas:"1"}},
+    {line:10,say:"Imprime con los datos de esta escopeta.",out:"Escopeta dispara y hace 80 de daño"},
+    {line:3,say:"Vuelve a Escopeta y sigue con lo suyo.",out:"…y suelta 8 perdigones"}]},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué pasa si sacás la línea super() de Escopeta.disparar()?",options:["Nada cambia","Ya no resta balas ni imprime el daño: solo suelta perdigones","Da error siempre","Dispara dos veces"],answer:1,explain:"Sin super(), la versión del padre no se ejecuta. El hijo la reemplazó por completo."},
+  {type:"fill",kicker:"Completá",q:"Registrar la clase para usarla en todo el proyecto:",code:`____ Arma\nextends Node3D`,options:["class_name","class","name","export"],answer:0,explain:"class_name le da un nombre global. Así podés escribir extends Arma, o var mi_arma: Arma."}
+ ]},
+ {id:"h6",title:"Recursos con tus datos",sub:"Resource y archivos .tres para armas y enemigos",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Separar los datos del código",html:`<p>Un juego tiene decenas de armas que funcionan igual pero con números distintos. En vez de un script por arma, creás un <b>Resource</b> propio: un archivo de datos que se edita en el Inspector.</p>
+   <pre class="code">${hl(DATOS_ARMA_GD)}</pre>
+   <p>Después, en el panel Sistema de archivos: clic derecho → <b>Nuevo recurso → DatosArma</b>. Guardás <code class="i">rifle.tres</code>, <code class="i">pistola.tres</code>, <code class="i">escopeta.tres</code>, cada uno con sus números.</p>
+   <p>El arma solo necesita <code class="i">@export var datos: DatosArma</code>. Arrastrás el .tres que quieras al Inspector y listo: cambiás de arma sin tocar código. Un diseñador puede balancear el juego sin saber programar.</p>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué ventaja tiene guardar las estadísticas de cada arma en un archivo .tres?",options:["El juego pesa más","Podés crear y ajustar armas desde el Inspector sin tocar el código","Es obligatorio en Godot","Para que dispare más rápido"],answer:1,explain:"Datos separados del código: un mismo script sirve para todas las armas."},
+  {type:"fill",kicker:"Completá",q:"Un recurso propio hereda de:",code:`class_name DatosEnemigo\nextends ____`,options:["Resource","Node","Node3D","Script"],answer:0,explain:"Resource es la base de los archivos de datos de Godot: texturas, sonidos, materiales y también los tuyos."},
+  {type:"quiz",kicker:"Pregunta",q:"Dos soldados usan el mismo soldado.tres. Desde código cambiás datos.vida de uno. ¿Qué pasa?",options:["Solo cambia ese soldado","Cambia en los dos, porque comparten el mismo recurso. Para que sea solo uno, se usa duplicate()","Da error","No cambia nada"],answer:1,explain:"Los recursos se comparten. Por eso los datos fijos van en el .tres, y la vida actual de cada uno va en una variable propia del enemigo, o en una copia hecha con datos.duplicate()."}
+ ]},
+ {id:"h7",title:"Depurar: encontrar errores",sub:"print, breakpoints, assert y el Depurador",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Cuando algo no funciona",html:`<ul><li><b>print()</b>: lo más simple. Mostrá el valor de una variable para ver qué está pasando: <code class="i">print("vida: ", vida)</code>.</li>
+   <li><b>Breakpoints</b>: hacé clic a la izquierda del número de línea en el editor de scripts y aparece un punto rojo. El juego se <b>pausa</b> al llegar ahí y en el Depurador ves el valor de todas las variables.</li>
+   <li><b>push_warning("…")</b> y <b>push_error("…")</b>: avisos en amarillo y rojo en el Depurador, sin frenar el juego.</li>
+   <li><b>assert(condición, "mensaje")</b>: si la condición es falsa, frena el juego. Solo actúa al probar desde el editor, no en el juego exportado.</li>
+   <li><b>Depurar → Formas de colisión visibles</b>: muestra todas las colisiones mientras jugás.</li></ul>
+   <pre class="code">${hl(`func recibir_danio(cantidad: int):\n\tassert(cantidad >= 0, "El daño no puede ser negativo")\n\tvida -= cantidad\n\tif vida < -100:\n\t\tpush_warning("Vida muy negativa, ¿doble daño?")`)}</pre>`},
+  {type:"quiz",kicker:"Pregunta",q:"Querés ver el valor de todas las variables justo cuando el jugador recarga. ¿Qué usás?",options:["Un breakpoint en la primera línea de recargar()","Cambiar el color del arma","Reiniciar Godot","Borrar la función"],answer:0,explain:"El breakpoint pausa el juego en esa línea. En el Depurador ves todas las variables y podés avanzar línea por línea."},
+  {type:"quiz",kicker:"Encontrá el error",q:"El enemigo nunca entra en PERSEGUIR. ¿Cuál es el error?",code:`func _physics_process(delta):\n\tvar d := global_position.distance_to(jugador.global_position)\n\tmatch estado:\n\t\tEstado.PATRULLA:\n\t\t\tif d > distancia_vision:\n\t\t\t\testado = Estado.PERSEGUIR`,options:["Falta delta","La condición está al revés: tiene que ser d < distancia_vision","match no funciona con enum","Falta un print"],answer:1,explain:"Con > te persigue cuando estás lejos, no cuando estás cerca. Un print(d) te mostraría enseguida que la condición no se cumple."},
+  {type:"info",kicker:"¡Nivel 2 completo!",title:"Ya programás como en un estudio",html:`<p>Tipos, diccionarios, enum y match, máquinas de estados, herencia, recursos y depuración son las herramientas que se usan todos los días en juegos de verdad. Con esto podés leer y entender el código de casi cualquier proyecto de Godot, y organizar el tuyo para que crezca sin volverse un lío.</p>`}
+ ]}
+];
 
 const COURSES={
  cero:{key:"cero",next:"gds",tag:"GDScript · Nivel 0",title:"De 0 en programación",sub:"Lo más básico de lo básico: qué es una instrucción, un script, una función, qué es _ready() y qué es una variable.",lessons:CERO},
- gds:{key:"gds",next:"menu",tag:"GDScript · Nivel 1",title:"GDScript para juegos 3D",sub:"Variables, funciones, movimiento, teclado y física con ejemplos de juegos 3D.",lessons:GDS},
+ gds:{key:"gds",next:"gds2",tag:"GDScript · Nivel 1",title:"GDScript para juegos 3D",sub:"Variables, funciones, movimiento, teclado y física con ejemplos de juegos 3D.",lessons:GDS},
+ gds2:{key:"gds2",next:"menu",tag:"GDScript · Nivel 2",title:"GDScript intermedio",sub:"Tipos estáticos, diccionarios, enum y match, máquinas de estados, herencia, recursos propios y depuración.",lessons:GDS2},
  menu:{key:"menu",next:"fps2",tag:"Curso FPS 3D · Unidad 1",title:"El menú principal",sub:"Menú plano, menú con fondo 3D cinematográfico, opciones y transición al nivel.",lessons:LESSONS},
  fps2:{key:"fps2",next:"fps3",tag:"Curso FPS 3D · Unidad 2",title:"El jugador",sub:"La escena del jugador, Mapa de entrada, mirar con el mouse, caminar, saltar, correr y agacharse.",lessons:FPS2},
  fps3:{key:"fps3",next:"mis",tag:"Curso FPS 3D · Unidad 3",title:"Armas y disparo",sub:"El arma en la escena, disparo con RayCast3D, cadencia, munición, recarga, retroceso y dianas con vida.",lessons:FPS3},

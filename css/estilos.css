@@ -387,7 +387,7 @@ pre.code input.pv{width:7ch;background:#1b3248;border:1px solid var(--accent);co
 /* elegir nivel */
 .choice-head h1{font-size:clamp(26px,4vw,36px)}
 .choice-head p{color:var(--muted);max-width:62ch;margin:8px 0 24px}
-.choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.choice{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
 .ccard{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .ccard.rec{border-color:var(--burro)}
 .ccard .tag{font-family:var(--f-display);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--burro);font-weight:700;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}

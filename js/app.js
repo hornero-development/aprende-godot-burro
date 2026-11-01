@@ -4,6 +4,7 @@ addEventListener("keydown",e=>{if(!S.lab||!S.lab.keys||e.target.closest&&e.targe
   if(e.code==="Space")jumpQ=true;if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code))e.preventDefault()});
 addEventListener("keyup",e=>KEYS.delete(e.code));
 function buildLab(kind,p,readout){
+  if(LABS[kind].fsm)return buildFSMLab(LABS[kind],p,readout);
   if(LABS[kind].map)return buildMapLab(LABS[kind],p,readout);
   if(LABS[kind].zones)return buildZoneLab(LABS[kind],p,readout);
   if(LABS[kind].fp)return buildFPLab(LABS[kind],p,readout);
@@ -125,7 +126,7 @@ function mountPreview(host,{mode="3d",openOptions=false,onLog,console:showCon=tr
 
 /* =================== navegación =================== */
 let G=null; // estado del editor
-const NAVOF={cero:"gds",gds:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones",mis:"lecciones",mapa:"lecciones"};
+const NAVOF={cero:"gds",gds:"gds",gds2:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones",mis:"lecciones",mapa:"lecciones"};
 const FPS_COURSES=["menu","fps2","fps3","mis","mapa"];
 function nextFPS(){for(const c of FPS_COURSES){const i=COURSES[c].lessons.findIndex(l=>!progress.done.includes(l.id));if(i>=0)return {c,i,all:false}}return {c:"menu",i:0,all:true}}
 function setNav(v){document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===v))}
@@ -171,7 +172,7 @@ function renderWelcome(rename=false){
 /* =================== inicio =================== */
 function renderInicio(){
   setNav("inicio");location.hash="inicio";
-  const st=currentStreak(),today=studiedToday(),nf=nextFPS(),fpsDone=FPS_COURSES.reduce((a,c)=>a+courseDone(c),0),fpsTot=FPS_COURSES.reduce((a,c)=>a+COURSES[c].lessons.length,0),gd=courseDone("gds")+courseDone("cero");
+  const st=currentStreak(),today=studiedToday(),nf=nextFPS(),fpsDone=FPS_COURSES.reduce((a,c)=>a+courseDone(c),0),fpsTot=FPS_COURSES.reduce((a,c)=>a+COURSES[c].lessons.length,0),gd=courseDone("gds")+courseDone("cero")+courseDone("gds2");
   const letters=["D","L","M","M","J","V","S"],days=new Set(user.days||[]);
   let week="";for(let k=6;k>=0;k--){const d=new Date();d.setDate(d.getDate()-k);const s=dayStr(d);
     week+=`<div><span>${letters[d.getDay()]}</span><i class="${days.has(s)?"on":""} ${k===0?"today":""}" title="${s}"></i></div>`}
@@ -183,7 +184,7 @@ function renderInicio(){
         <div class="hello"><small>BIENVENIDO AL CUARTEL</small><h1>Hola, ${esc(user.name)}</h1></div>
         <nav class="hmenu" aria-label="Menú principal">
           <button class="hbtn" data-go="empezar">Empezar lección<small>Curso FPS 3D · ${nf.all?"Repasar: ":""}${esc(COURSES[nf.c].lessons[nf.i].title)}</small></button>
-          <button class="hbtn" data-go="gds">GDScript<small>Empezá a programar de 0 o seguí con GDScript para 3D · ${gd} de ${CERO.length+GDS.length} lecciones</small></button>
+          <button class="hbtn" data-go="gds">GDScript<small>De 0 en programación hasta GDScript intermedio · ${gd} de ${CERO.length+GDS.length+GDS2.length} lecciones</small></button>
           <button class="hbtn" data-go="lecciones">Elegir lecciones<small>Curso FPS 3D · ${fpsDone} de ${fpsTot} completas · ${progress.xp} XP</small></button>
           <button class="hbtn" data-go="godot">Godot interactivo<small>Explorá el editor y descubrí para qué sirve cada botón</small></button>
           <button class="hbtn" data-go="patio">Patio de juegos<small>Probá el menú plano y el 3D</small></button>
@@ -237,12 +238,13 @@ function renderGDSChoice(){
       <button class="btn ${rec?"":"ghost"}" data-c="${c}">${d===0?btn:d===n?"Repasar":"Seguir: "+esc(C.lessons[nextIn(c)].title)}</button></article>`};
   const ceroDone=courseDone("cero")===CERO.length;
   app.innerHTML=`<section class="choice-head"><div class="kicker">GDScript</div><h1>¿Por dónde empezás?</h1>
-    <p>Elegí según lo que ya sabés. Si nunca escribiste código, empezá de 0 en programación. Si ya sabés lo básico, andá directo a GDScript para juegos 3D. Podés pasar de uno a otro cuando quieras.</p></section>
+    <p>Elegí según lo que ya sabés. Si nunca escribiste código, empezá de 0 en programación. Si ya sabés lo básico, andá directo a GDScript para juegos 3D. Y cuando quieras organizar código como en un estudio, seguí con el Nivel 2.</p></section>
     <div class="choice">
       ${card("cero",!ceroDone,["Qué es programar y por qué el orden importa","Qué es un nodo y qué es un script","Qué es una función: definir y llamar","Qué es _ready() y quién la llama","Qué es una variable","Cómo leer los errores"],"Empezar de 0 en programación")}
       ${card("gds",ceroDone,["Tipos de datos y Vector3","Condiciones, bucles y listas","Mover y girar objetos en 3D","Leer el teclado","Señales y física del jugador FPS"],"Empezar directo en GDScript 3D")}
+      ${card("gds2",false,["Tipos estáticos y diccionarios","enum y match","Máquina de estados de un enemigo","Clases propias y herencia","Recursos .tres y depuración"],"Empezar el Nivel 2")}
     </div>
-    <div style="margin-top:36px">${coursePath("cero")}${coursePath("gds")}</div>`;
+    <div style="margin-top:36px">${coursePath("cero")}${coursePath("gds")}${coursePath("gds2")}</div>`;
   app.querySelectorAll(".ccard [data-c]").forEach(b=>b.onclick=()=>startLesson(b.dataset.c,nextIn(b.dataset.c)));
   bindPaths();
 }
@@ -314,7 +316,7 @@ function finish(){
   const nextI=L.i+1<ls.length?L.i+1:null,c=L.c;
   const nx=COURSES[c].next,courseEnd=nextI===null&&!!nx;
   app.innerHTML=`<div class="lesson"><div class="step finish">
-    <div class="kicker">${nextI===null?(c==="cero"?"¡Nivel 0 completo!":c==="gds"?"¡GDScript completo!":"¡Unidad completa!"):"Lección completa"}</div><div class="big">+${gain} XP</div>
+    <div class="kicker">${nextI===null?(c==="cero"?"¡Nivel 0 completo!":c==="gds"?"¡Nivel 1 completo!":c==="gds2"?"¡Nivel 2 completo!":"¡Unidad completa!"):"Lección completa"}</div><div class="big">+${gain} XP</div>
     <div class="fire">${FLAME}${grew?`¡Racha de ${st} ${st===1?"día":"días"}!`:`Racha: ${st} ${st===1?"día":"días"} (hoy ya contaba)`}</div>
     <h2 style="margin-top:12px">${esc(les.title)}</h2>
     <p>${L.mistakes===0?"Sin errores. Impecable.":`Tuviste ${L.mistakes} error${L.mistakes>1?"es":""}. Podés repetirla cuando quieras.`} ${first?"":"Por repasar sumás 5 XP."}${courseEnd?` Lo siguiente es: ${esc(COURSES[nx].title)}.`:nextI===null?" Pronto llegan las próximas unidades.":""}</p>
