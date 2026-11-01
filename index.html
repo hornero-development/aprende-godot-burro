@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aprende Godot Burro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="css/estilos.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <button class="logo" id="go-home" aria-label="Aprende Godot Burro, ir al inicio">
+      <span class="ears" aria-hidden="true"><i></i><i></i></span>
+      <span class="wm"><small>APRENDE GODOT</small><b>BURRO</b></span>
+    </button>
+    <nav class="nav" id="nav">
+      <button data-go="inicio">Inicio</button>
+      <button data-go="lecciones">Lecciones</button>
+      <button data-go="gds">GDScript</button>
+      <button data-go="patio">Patio</button>
+      <button class="who" id="who" data-go="usuario" title="Cambiar nombre"></button>
+    </nav>
+
+  </div>
+</header>
+
+<main id="app"></main>
+
+<script src="js/base.js"></script>
+<script src="js/lecciones.js"></script>
+<script src="js/app.js"></script>
+<script src="js/editor-godot.js"></script>
+<script src="js/arranque.js"></script>
+</body>
+</html>
