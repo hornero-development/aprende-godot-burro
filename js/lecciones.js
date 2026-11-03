@@ -1975,6 +1975,367 @@ const GDS6=[
   {type:"info",kicker:"¡Camino completo!",title:"GDScript, de 0 a profesional",html:`<p>Completaste el camino entero: desde qué es una instrucción hasta exportar un juego optimizado. Tenés todo lo necesario para leer cualquier proyecto de Godot y hacer el tuyo con vehículos, misiones y mundo abierto.</p><p>De acá en adelante, lo que más te va a hacer crecer es <b>terminar proyectos chicos</b> y leer el código de otros. ¡A programar, burro!</p>`}
  ]}
 ];
+/* =================== Unidad 1 · menú 3D tipo sala de guerra =================== */
+const TREE_SALA = `<span class="t">SalaDeGuerra</span> <span class="m">(Node3D)</span>  <span class="m">← sala_de_guerra.gd</span>
+├─ <span class="t">Camera3D</span>
+├─ <span class="t">WorldEnvironment</span>
+├─ <span class="t">Habitacion</span> <span class="m">(Node3D)</span>
+│  ├─ <span class="t">Piso</span>, <span class="t">Paredes</span>, <span class="t">Mesa</span> <span class="m">(MeshInstance3D)</span>
+│  └─ <span class="t">Lampara1</span>, <span class="t">Lampara2</span> <span class="m">(OmniLight3D)</span>
+├─ <span class="t">Vistas</span> <span class="m">(Node3D)</span>
+│  ├─ <span class="t">General</span> <span class="m">(Marker3D)</span>
+│  ├─ <span class="t">Mapa</span> <span class="m">(Marker3D)</span>
+│  └─ <span class="t">Radio</span> <span class="m">(Marker3D)</span>
+├─ <span class="t">Objetos</span> <span class="m">(Node3D)</span>
+│  ├─ <span class="t">ObjetoMapa</span> <span class="m">(Area3D)</span>
+│  │  ├─ <span class="t">CollisionShape3D</span>
+│  │  └─ <span class="t">ModeloMapa</span> <span class="m">(MeshInstance3D)</span>
+│  └─ <span class="t">ObjetoRadio</span> <span class="m">(Area3D)</span>
+├─ <span class="t">PinesMapa</span> <span class="m">(Node3D)</span>  <span class="m">← pines con pin_mision.gd</span>
+├─ <span class="t">Cartel</span> <span class="m">(Label3D)</span>
+└─ <span class="t">UI</span> <span class="m">(CanvasLayer)</span>
+   ├─ <span class="t">BotonVolver</span> <span class="m">(Button)</span>
+   └─ <span class="t">PanelMision</span> <span class="m">(PanelContainer)</span>`;
+
+const VIAJE_GD = `var vistas := {}            # "Mapa" -> su Marker3D
+var vista_actual := "General"
+var en_movimiento := false
+
+func _ready():
+	for marcador in $Vistas.get_children():
+		vistas[marcador.name] = marcador
+	$Camera3D.global_transform = vistas["General"].global_transform
+
+func ir_a_vista(nombre: String):
+	if en_movimiento:
+		return
+	en_movimiento = true
+	var desde: Transform3D = $Camera3D.global_transform
+	var hasta: Transform3D = vistas[nombre].global_transform
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_method(func(t: float):
+		$Camera3D.global_transform = desde.interpolate_with(hasta, t), 0.0, 1.0, 1.2)
+	await tween.finished
+	vista_actual = nombre
+	en_movimiento = false`;
+
+const TOCAR_GD = `func _ready():
+	# ... lo de la lección anterior ...
+	get_viewport().physics_object_picking = true   # ¡sin esto no hay clics!
+	for objeto in get_tree().get_nodes_in_group("objeto_menu"):
+		objeto.input_event.connect(_on_objeto_input_event.bind(objeto))
+		objeto.mouse_entered.connect(_on_objeto_mouse_entered.bind(objeto))
+		objeto.mouse_exited.connect(_on_objeto_mouse_exited.bind(objeto))
+
+func _on_objeto_input_event(_camara, event, _pos, _normal, _forma, objeto):
+	if vista_actual != "General":
+		return
+	if event is InputEventMouseButton and event.pressed \\
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		ir_a_vista(objeto.get_meta("vista"))
+
+func _on_objeto_mouse_entered(objeto):
+	if vista_actual == "General":
+		$Cartel.text = objeto.get_meta("titulo")
+		iluminar(objeto, true)
+
+func _on_objeto_mouse_exited(objeto):
+	$Cartel.text = "CUARTEL GENERAL"
+	iluminar(objeto, false)`;
+
+const BRILLO_GD = `var brillo := StandardMaterial3D.new()
+
+func _ready():
+	brillo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	brillo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	brillo.blend_mode = BaseMaterial3D.BLEND_MODE_ADD   # SUMA luz encima
+	brillo.albedo_color = Color(1.0, 0.85, 0.55, 0.22)  # cálido, suave
+
+func iluminar(objeto: Node, encender: bool):
+	for malla in objeto.find_children("*", "MeshInstance3D"):
+		malla.material_overlay = brillo if encender else null
+	var luz := objeto.get_node_or_null("Luz")
+	if luz:
+		create_tween().tween_property(luz, "light_energy", 1.5 if encender else 0.0, 0.25)`;
+
+const PIN_GD = `class_name PinMision
+extends Area3D
+
+signal elegido(pin)
+
+@export var nombre_mision := "Operación Puente"
+@export_multiline var descripcion := "Tomá el puente del río al amanecer."
+@export_file("*.tscn") var escena := "res://niveles/mision_1.tscn"
+
+func _input_event(_camara, event, _pos, _normal, _forma):
+	if event is InputEventMouseButton and event.pressed \\
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		elegido.emit(self)`;
+
+const MISION_GD = `var mision_elegida: PinMision
+
+func _ready():
+	# ... lo de antes ...
+	for pin in $PinesMapa.get_children():
+		pin.elegido.connect(_on_pin_elegido)
+	$UI/PanelMision/BotonEmpezar.pressed.connect(_empezar)
+	$UI/BotonVolver.pressed.connect(func(): ir_a_vista("General"))
+	activar_pines(false)
+
+func activar_pines(activos: bool):
+	for pin in $PinesMapa.get_children():
+		pin.visible = activos
+		pin.input_ray_pickable = activos
+
+func _on_pin_elegido(pin: PinMision):
+	mision_elegida = pin
+	$UI/PanelMision/Titulo.text = pin.nombre_mision
+	$UI/PanelMision/Descripcion.text = pin.descripcion
+	$UI/PanelMision.show()
+
+func _empezar():
+	get_tree().change_scene_to_file(mision_elegida.escena)
+
+func _unhandled_input(event):
+	if event.is_action_pressed("ui_cancel") and vista_actual != "General":
+		$UI/PanelMision.hide()
+		ir_a_vista("General")`;
+
+Object.assign(LABS,{
+ salaCamara:{code:`func ir_a_vista(nombre: String):
+	# ...
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_method(func(t: float):
+		$Camera3D.global_transform = desde.interpolate_with(hasta, t), 0.0, 1.0, __d__)
+	await tween.finished`,
+  params:{d:{val:1.2,min:0.1,max:5,step:0.1}},sala:1,
+  pad:[["vista:General","Vista General"],["vista:Mapa","Vista Mapa"],["vista:Radio","Vista Radio"]],
+  hint:"Usá los botones de abajo para mover la cámara entre los Marker3D."},
+ salaTocar:{code:`brillo.albedo_color = Color(1.0, 0.85, 0.55, __i__)   # intensidad del brillo
+
+func _on_objeto_mouse_entered(objeto):
+	if vista_actual == "General":
+		$Cartel.text = objeto.get_meta("titulo")
+		iluminar(objeto, true)`,
+  params:{i:{val:0.22,min:0,max:0.8,step:0.02}},sala:2,
+  hint:"Pasá el mouse por el mapa, la radio y los teléfonos. Hacé clic para ir. Clic derecho para volver."},
+ salaMision:{code:`func _on_pin_elegido(pin: PinMision):
+	mision_elegida = pin
+	$UI/PanelMision/Titulo.text = pin.nombre_mision
+	$UI/PanelMision/Descripcion.text = pin.descripcion
+	$UI/PanelMision.show()
+# duración del viaje de cámara: __d__ s`,
+  params:{d:{val:1.2,min:0.1,max:5,step:0.1}},sala:3,
+  hint:"Tocá el mapa, después un pin rojo y elegí la misión. Clic derecho o Esc para volver."}
+});
+
+function mapaTextura(){
+  const c=document.createElement("canvas");c.width=1024;c.height=640;const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,1024,640);g.addColorStop(0,"#d9c493");g.addColorStop(1,"#c2a46c");x.fillStyle=g;x.fillRect(0,0,1024,640);
+  for(let i=0;i<1400;i++){x.fillStyle=`rgba(90,60,20,${Math.random()*.06})`;x.fillRect(Math.random()*1024,Math.random()*640,2,2)}
+  x.fillStyle="#a9b8b0";x.beginPath();x.moveTo(0,0);x.lineTo(260,0);x.bezierCurveTo(230,120,300,170,240,260);x.bezierCurveTo(190,330,250,420,200,520);x.lineTo(160,640);x.lineTo(0,640);x.fill();
+  x.strokeStyle="#6b8a9a";x.lineWidth=5;x.beginPath();x.moveTo(1024,120);x.bezierCurveTo(820,170,700,260,620,330);x.bezierCurveTo(540,400,420,420,250,450);x.stroke();
+  x.strokeStyle="rgba(80,55,25,.5)";x.lineWidth=2;x.setLineDash([10,8]);
+  [[[330,140],[520,230],[700,180],[900,260]],[[400,560],[560,470],[760,520],[940,440]]].forEach(r=>{x.beginPath();x.moveTo(...r[0]);r.slice(1).forEach(p=>x.lineTo(...p));x.stroke()});
+  x.setLineDash([]);x.fillStyle="rgba(70,45,20,.85)";x.font="italic 600 30px Georgia, serif";x.textAlign="center";
+  [["FRENTE NORTE",620,110],["VALLE DEL RÍO",700,360],["PUERTO SUR",420,600],["MAR GRIS",110,330]].forEach(([t,a,b])=>x.fillText(t,a,b));
+  x.strokeStyle="rgba(150,40,30,.7)";x.lineWidth=3;[[760,150],[540,300],[830,500]].forEach(([a,b])=>{x.beginPath();x.arc(a,b,30,0,Math.PI*2);x.stroke()});
+  x.strokeStyle="#5b3d1c";x.lineWidth=14;x.strokeRect(7,7,1010,626);
+  const t=new THREE.CanvasTexture(c);return t;
+}
+function cartelTextura(){const c=document.createElement("canvas");c.width=512;c.height=128;const t=new THREE.CanvasTexture(c);
+  t.dibujar=txt=>{const x=c.getContext("2d");x.fillStyle="#2f6a2a";x.fillRect(0,0,512,128);
+    for(let i=0;i<500;i++){x.fillStyle=`rgba(255,255,255,${Math.random()*.05})`;x.fillRect(Math.random()*512,Math.random()*128,2,2)}
+    x.strokeStyle="#8a3a1c";x.lineWidth=14;x.strokeRect(7,7,498,114);
+    x.fillStyle="#f2efe2";x.font="700 44px Georgia, serif";x.textAlign="center";x.textBaseline="middle";x.fillText(txt,256,66);t.needsUpdate=true};
+  return t}
+
+function buildSalaLab(def,p,readout){
+  const T=THREE,etapa=def.sala,scene=new T.Scene();scene.background=new T.Color(0x0d1117);scene.fog=new T.Fog(0x0d1117,8,18);
+  const cam=new T.PerspectiveCamera(58,16/9,.05,60);scene.add(cam);
+  scene.add(new T.HemisphereLight(0x9fb3c8,0x2a2118,.35));
+  const M=(c,r=.9)=>new T.MeshStandardMaterial({color:c,roughness:r});
+  const add=(geo,mat,x,y,z,parent=scene)=>{const m=new T.Mesh(geo,mat);m.position.set(x,y,z);parent.add(m);return m};
+  // habitación
+  const piso=add(new T.PlaneGeometry(10,9),M(0x3b2f24),0,0,-.5);piso.rotation.x=-Math.PI/2;
+  add(new T.BoxGeometry(10,4,.1),M(0x5a6a6e),0,2,-3.1);
+  add(new T.BoxGeometry(.1,4,9),M(0x52615f),-4,2,-.5);add(new T.BoxGeometry(.1,4,9),M(0x52615f),4,2,-.5);
+  const techo=add(new T.PlaneGeometry(10,9),M(0x2b3236),0,3.6,-.5);techo.rotation.x=Math.PI/2;
+  [-2.5,0,2.5].forEach(x=>add(new T.BoxGeometry(.18,.25,9),M(0x6b7a7d),x,3.45,-.5));
+  // mapa
+  const gMapa=new T.Group();scene.add(gMapa);
+  const marco=add(new T.BoxGeometry(3.9,2.5,.08),M(0x5b3d1c),-.4,1.95,-3.02,gMapa);
+  const matMapa=new T.MeshStandardMaterial({map:mapaTextura(),roughness:.95});
+  const lamina=add(new T.PlaneGeometry(3.7,2.3),matMapa,-.4,1.95,-2.97,gMapa);
+  // mesa de la radio
+  const gRadio=new T.Group();scene.add(gRadio);
+  add(new T.BoxGeometry(1.6,.08,.9),M(0x5c3b22),-2.9,.85,-1.9);
+  [[-3.6,-2.3],[-2.2,-2.3],[-3.6,-1.5],[-2.2,-1.5]].forEach(([x,z])=>add(new T.BoxGeometry(.07,.85,.07),M(0x4a2f1b),x,.42,z));
+  add(new T.BoxGeometry(.7,.42,.45),M(0xc9ccc4,.6),-3.1,1.1,-2,gRadio);
+  add(new T.BoxGeometry(.55,.26,.4),M(0xb8bbb2,.6),-2.45,1.02,-1.95,gRadio);
+  const dial=add(new T.CylinderGeometry(.09,.09,.04,16),M(0x2a2a2a),-3.1,1.1,-1.76,gRadio);dial.rotation.x=Math.PI/2;
+  // mesa de teléfonos
+  const gTel=new T.Group();scene.add(gTel);
+  add(new T.BoxGeometry(2.4,.08,1),M(0x2f5130),1.9,.8,-1.3);add(new T.BoxGeometry(2.4,.75,.9),M(0x5c3b22),1.9,.4,-1.3);
+  [[1.1,0x2e7d32],[1.7,0xd8d6c8],[2.3,0xb73a2e],[2.8,0x2e7d32]].forEach(([x,c])=>{add(new T.BoxGeometry(.3,.14,.24),M(c,.5),x,.91,-1.3,gTel);add(new T.BoxGeometry(.34,.06,.08),M(c,.5),x,1.01,-1.36,gTel)});
+  // lámparas colgantes y luces cálidas
+  const luces=[];[[-.4,-2],[1.9,-1.2],[-2.9,-1.8]].forEach(([x,z])=>{add(new T.CylinderGeometry(.005,.005,.9,4),M(0x111111),x,3.15,z);
+    const pant=add(new T.ConeGeometry(.28,.25,20,1,true),new T.MeshStandardMaterial({color:0x2f6a2a,side:T.DoubleSide,emissive:0x112211}),x,2.65,z);
+    const l=new T.PointLight(0xffd59a,1.1,6,2);l.position.set(x,2.5,z);scene.add(l);luces.push(l)});
+  // cartel colgante
+  const texCartel=cartelTextura();texCartel.dibujar("CUARTEL GENERAL");
+  const cartel=add(new T.PlaneGeometry(1.6,.4),new T.MeshBasicMaterial({map:texCartel}),-1.9,3.0,-2.2);
+  [-.7,.7].forEach(dx=>add(new T.CylinderGeometry(.006,.006,.6,4),M(0x111111),-1.9+dx,3.4,-2.2));
+  // luz extra que se enciende sobre el objeto elegido
+  const foco=new T.PointLight(0xffc878,0,3.5,2);scene.add(foco);
+  // pines del mapa
+  const MIS=[{n:"Operación Puente",d:"Tomá el puente del río al amanecer, antes de que lo vuelen.",u:[.45,.3]},
+             {n:"Puerto Sur",d:"Infiltrate de noche en el puerto y robá los planos del depósito.",u:[-.1,-.36]},
+             {n:"Frente Norte",d:"Defendé la línea durante 10 minutos hasta que llegue el refuerzo.",u:[.82,.1]}];
+  const pines=MIS.map(m=>{const g=new T.Group();g.position.set(-.4+m.u[0]*1.85,1.95+m.u[1]*1.15,-2.93);scene.add(g);
+    const mat=new T.MeshStandardMaterial({color:0xc0261c,emissive:0x000000});
+    const cab=add(new T.SphereGeometry(.06,14,10),mat,0,0,.07,g);add(new T.CylinderGeometry(.008,.008,.08,6),M(0x999999),0,0,.03,g).rotation.x=Math.PI/2;
+    g.visible=false;return {...m,g,mat,cab}});
+  // vistas (Marker3D)
+  const V={General:{p:[0,1.7,3.6],l:[-.2,1.45,-2]},Mapa:{p:[-.4,1.95,-1.25],l:[-.4,1.95,-3]},Radio:{p:[-2.1,1.55,-.6],l:[-2.9,1.0,-2]},Telefonos:{p:[1.3,1.55,.4],l:[1.9,.9,-1.3]}};
+  const tmp=new T.PerspectiveCamera();const pose=n=>{tmp.position.set(...V[n].p);tmp.lookAt(...V[n].l);return {pos:tmp.position.clone(),q:tmp.quaternion.clone()}};
+  let P0=pose("General");cam.position.copy(P0.pos);cam.quaternion.copy(P0.q);
+  const objetos=[{nombre:"ObjetoMapa",titulo:"CAMPAÑA",vista:"Mapa",g:gMapa,luz:[-.4,2.7,-2.2]},{nombre:"ObjetoRadio",titulo:"OPCIONES",vista:"Radio",g:gRadio,luz:[-2.9,1.9,-1.5]},{nombre:"ObjetoTelefonos",titulo:"SALIR",vista:"Telefonos",g:gTel,luz:[1.9,1.8,-.8]}];
+  const S={vista:"General",mov:false,t:0,from:null,to:null,dest:"",hover:null,hoverPin:null,log:["vista_actual = General"],pulso:0,panel:null,time:0};
+  const rc=new T.Raycaster(),mp=new T.Vector2();let el=null,hud=null;
+  const lab={scene,cam,keys:false,tick(){},rebuild(){}};
+  const meshesOf=g=>{const a=[];g.traverse(o=>{if(o.isMesh)a.push(o)});return a};
+  const setGlow=(o,k)=>{meshesOf(o.g).forEach(m=>{if(m.material===matMapa||m.material.emissive){m.material.emissive=m.material.emissive||new T.Color();m.material.emissive.setRGB(1*k,.85*k,.55*k)}})};
+  // cada objeto tiene materiales propios para poder iluminarlo solo a él
+  objetos.forEach(o=>meshesOf(o.g).forEach(m=>{if(m.material!==matMapa)m.material=m.material.clone()}));
+  const log=t=>{S.log.unshift(t);S.log.length=Math.min(S.log.length,4)};
+  function ir(n){if(S.mov||S.vista===n)return;S.mov=true;S.from={pos:cam.position.clone(),q:cam.quaternion.clone()};S.to=pose(n);S.t=0;S.dest=n;
+    log(`ir_a_vista("${n}")  → en_movimiento = true`);if(S.hover){setGlow(S.hover,0);S.hover=null;foco.intensity=0}
+    if(S.hoverPin){S.hoverPin.g.scale.setScalar(1);S.hoverPin.mat.color.setHex(0xc0261c);S.hoverPin.mat.emissive.setHex(0);S.hoverPin=null;if(el)el.style.cursor="default"}
+    pines.forEach(pn=>pn.g.visible=false);mostrarPanel(null);texCartel.dibujar(n==="General"?"CUARTEL GENERAL":(objetos.find(o=>o.vista===n)||{titulo:n}).titulo);blip(420)}
+  function mostrarPanel(html){if(!hud)return;const pn=hud.querySelector(".salapanel");if(!html){pn.hidden=true;return}pn.innerHTML=html;pn.hidden=false}
+  function pick(e,list){const b=el.getBoundingClientRect();mp.x=(e.clientX-b.left)/b.width*2-1;mp.y=-(e.clientY-b.top)/b.height*2+1;rc.setFromCamera(mp,cam);return rc.intersectObjects(list,true)[0]}
+  lab.bind=e=>{el=e;el.style.cursor="default";
+    hud=document.createElement("div");hud.className="hud";hud.innerHTML='<div class="salapanel" hidden></div><button class="salavolver" hidden>← Volver</button>';el.appendChild(hud);
+    hud.querySelector(".salavolver").onclick=ev=>{ev.stopPropagation();ir("General")};
+    hud.querySelector(".salapanel").addEventListener("click",ev=>{ev.stopPropagation();const b=ev.target.closest("[data-acc]");if(!b)return;
+      if(b.dataset.acc==="empezar"){log(`change_scene_to_file("${S.panel.escena}")`);mostrarPanel(`<b>Cargando ${esc(S.panel.n)}…</b><p>En Godot acá cambiaría a la escena del nivel.</p>`);blip(880)}
+      if(b.dataset.acc==="cerrar"){mostrarPanel(null)}});
+    el.addEventListener("contextmenu",ev=>ev.preventDefault());
+    el.addEventListener("pointermove",ev=>{if(S.mov||etapa<2)return;
+      if(S.vista==="General"){const h=pick(ev,objetos.map(o=>o.g));const o=h?objetos.find(o=>{let n=h.object;while(n){if(n===o.g)return true;n=n.parent}return false}):null;
+        if(o!==S.hover){if(S.hover)setGlow(S.hover,0);S.hover=o;if(o){texCartel.dibujar(o.titulo);foco.position.set(...o.luz);log(`mouse_entered(${o.nombre}) → Cartel.text = "${o.titulo}"`);blip(760)}else{texCartel.dibujar("CUARTEL GENERAL");foco.intensity=0}el.style.cursor=o?"pointer":"default"}}
+      else if(S.vista==="Mapa"&&etapa>=3){const h=pick(ev,pines.map(q=>q.g));const q=h?pines.find(q=>{let n=h.object;while(n){if(n===q.g)return true;n=n.parent}return false}):null;
+        if(q!==S.hoverPin){if(S.hoverPin){S.hoverPin.g.scale.setScalar(1);S.hoverPin.mat.color.setHex(0xc0261c);S.hoverPin.mat.emissive.setHex(0)}S.hoverPin=q;
+          if(q){q.g.scale.setScalar(1.35);q.mat.color.setHex(0xffc23a);q.mat.emissive.setHex(0x553300);blip(760)}el.style.cursor=q?"pointer":"default"}}});
+    el.addEventListener("pointerdown",ev=>{if(ev.button===2){if(S.vista!=="General")ir("General");return}
+      if(S.mov||etapa<2)return;
+      if(S.vista==="General"&&S.hover){log(`input_event(clic izquierdo) en ${S.hover.nombre}`);ir(S.hover.vista)}
+      else if(S.vista==="Mapa"&&S.hoverPin){const q=S.hoverPin;S.panel={...q,escena:`res://niveles/${q.n.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/ /g,"_")}.tscn`};
+        log(`pin.elegido.emit() → ${q.n}`);blip(600);
+        mostrarPanel(`<small>MISIÓN</small><b>${esc(q.n)}</b><p>${esc(q.d)}</p><div><button data-acc="empezar">Empezar</button><button data-acc="cerrar" class="g">Cerrar</button></div>`)}
+      else if(S.vista==="Radio"&&etapa>=2){mostrarPanel(`<small>RADIO</small><b>Opciones</b><p>Acá abrirías el panel de Opciones (lo armás en la lección "Pantalla de opciones").</p><div><button data-acc="cerrar" class="g">Cerrar</button></div>`)}
+      else if(S.vista==="Telefonos"&&etapa>=2){mostrarPanel(`<small>TELÉFONO</small><b>¿Salir del juego?</b><p>En Godot: get_tree().quit()</p><div><button data-acc="cerrar" class="g">Cerrar</button></div>`)}});
+  };
+  const onKey=ev=>{if(ev.key==="Escape"&&el&&document.body.contains(el)&&S.vista!=="General")ir("General")};addEventListener("keydown",onKey);
+  let prevKeys=new Set();
+  lab.tick=dt=>{S.time+=dt;
+    // botones de la etapa 1 (llegan como teclas virtuales del pad)
+    KEYS.forEach(k=>{if(k.startsWith("vista:")&&!prevKeys.has(k))ir(k.slice(6))});prevKeys=new Set(KEYS);
+    if(S.mov){const dur=Math.max(.1,p.d??1.2);S.t=Math.min(1,S.t+dt/dur);const e=.5-.5*Math.cos(Math.PI*S.t);
+      cam.position.lerpVectors(S.from.pos,S.to.pos,e);cam.quaternion.copy(S.from.q).slerp(S.to.q,e);
+      if(S.t>=1){S.mov=false;S.vista=S.dest;log(`await tween.finished → vista_actual = "${S.vista}"`);
+        pines.forEach(q=>q.g.visible=S.vista==="Mapa"&&etapa>=3);if(hud)hud.querySelector(".salavolver").hidden=S.vista==="General"||etapa<2}}
+    else if(S.vista==="General"){const b=pose("General");cam.position.copy(b.pos).add(new T.Vector3(Math.sin(S.time*.4)*.05,Math.sin(S.time*.6)*.02,0))}
+    if(S.hover){const k=(p.i??.22)*(.75+.25*Math.sin(S.time*5));setGlow(S.hover,k);foco.intensity=k*5}
+    luces.forEach((l,i)=>l.intensity=1.05+Math.sin(S.time*7+i*2)*.03);
+    const objTxt=S.hover?S.hover.nombre:S.hoverPin?S.hoverPin.n:"ninguno";
+    readout(`vista_actual = "${S.vista}"   en_movimiento = ${S.mov}${S.mov?`  (${Math.round(S.t*100)}%)`:""}   bajo el mouse: ${objTxt}\n${S.log.join("\n")}`)};
+  return lab;
+}
+
+const SALA_LECCIONES=[
+ {id:"s1",title:"Armar la sala de guerra",sub:"Tu primera escena 3D desde cero",xp:25,steps:[
+  {type:"info",kicker:"La idea",title:"Un menú que es un lugar",html:`<p>Algunos juegos clásicos de guerra no tienen un menú de botones planos: tienen una <b>habitación 3D</b>, como una sala de guerra con un mapa en la pared, teléfonos y una radio. Pasás el mouse por un objeto y se ilumina. Lo tocás y la <b>cámara viaja</b> hasta él. En el mapa elegís la misión tocando un pin.</p>
+   <div class="flow"><div>Vista general<small>ves toda la sala</small></div><b>→</b><div>Tocás el mapa<small>se ilumina y la cámara viaja</small></div><b>→</b><div class="hot">Elegís la misión<small>tocás un pin del mapa</small></div></div>
+   <p>Lo vamos a armar en cuatro lecciones. En esta, la sala. No necesitás saber nada de 3D: todo es poner piezas y moverlas.</p>`},
+  {type:"info",kicker:"Paso 1",title:"Crear la escena 3D",html:`<ol><li>En Godot, arriba: <b>Escena → Nueva escena</b>.</li>
+   <li>En el panel Escena (izquierda) tocá <b>Escena 3D</b>. Se crea un nodo <code class="i">Node3D</code>: la raíz, el "contenedor" de todo.</li>
+   <li>Hacé doble clic sobre su nombre y llamalo <b>SalaDeGuerra</b>.</li>
+   <li><b>Ctrl + S</b> para guardar. Creá una carpeta <code class="i">ui</code> y guardala como <code class="i">sala_de_guerra.tscn</code>.</li></ol>
+   <p>Arriba, en el centro, tiene que estar elegido el espacio <b>3D</b>.</p>`},
+  {type:"info",kicker:"Paso 2",title:"Piso, paredes y mesas con cajas",html:`<p>Para empezar no hacen falta modelos lindos: se arma todo con <b>cajas</b> y después se reemplazan.</p>
+   <ol><li>Seleccioná SalaDeGuerra y tocá el <b>+</b> (Añadir nodo hijo). Buscá <code class="i">MeshInstance3D</code> y creálo. Es el nodo que <b>muestra un objeto 3D</b>.</li>
+   <li>En el Inspector (derecha), en <b>Mesh</b>, elegí <b>Nuevo BoxMesh</b>. Aparece una caja.</li>
+   <li>Tocá la caja en el Inspector para abrir sus opciones y cambiá <b>Size</b>: para el piso, por ejemplo, 10 × 0.1 × 9.</li>
+   <li>Movela con la herramienta <b>Mover (W)</b> arrastrando las flechas de colores: rojo es X, verde es Y (arriba) y azul es Z.</li>
+   <li>Repetí para las paredes, la mesa de la radio y la mesa de los teléfonos. Ponele nombre a cada una: Piso, ParedFondo, MesaRadio…</li></ol>
+   <p><b>El mapa</b> es otra MeshInstance3D con <b>Nuevo QuadMesh</b> (un rectángulo plano), apoyado contra la pared del fondo. En <b>Material Override → Nuevo StandardMaterial3D → Albedo → Texture</b> arrastrás la imagen de tu mapa.</p>`},
+  {type:"info",kicker:"Paso 3",title:"Cámara, lámparas y ambiente",html:`<ol><li>Agregá una <code class="i">Camera3D</code> y ubicala donde estaría tu cabeza al entrar a la sala, mirando hacia el mapa. Arriba del visor, tocá <b>Vista previa</b> para ver lo que ve la cámara.</li>
+   <li>Para las lámparas colgantes, agregá <code class="i">OmniLight3D</code> (luz que sale de un punto hacia todos lados). Elegí un color cálido, amarillento, y activá <b>Shadow</b> para que proyecte sombras.</li>
+   <li>Agregá un <code class="i">WorldEnvironment</code> y en <b>Environment → Nuevo Environment</b> bajá la luz ambiente: la sala tiene que verse oscura y que las lámparas hagan el trabajo.</li></ol>
+   <p>Así queda el árbol completo cuando terminemos las cuatro lecciones:</p><div class="tree">${TREE_SALA}</div>`},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué nodo usás para mostrar una caja, una mesa o el mapa?",options:["Node3D","MeshInstance3D","Camera3D","Label"],answer:1,explain:"MeshInstance3D muestra una malla (mesh): una caja, un plano o un modelo importado."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué tipo de Mesh conviene para el mapa de la pared?",options:["SphereMesh","QuadMesh, un rectángulo plano","CapsuleMesh","Ninguno"],answer:1,explain:"El mapa es plano: un QuadMesh con la imagen del mapa como textura."},
+  {type:"quiz",kicker:"Pregunta",q:"La sala se ve toda gris y sin clima. ¿Qué ajustás primero?",options:["Bajar la luz ambiente del WorldEnvironment y usar OmniLight3D cálidas con sombra","Agregar más cajas","Cambiar el nombre de la escena","Borrar la cámara"],answer:0,explain:"La atmósfera sale de la luz: ambiente oscuro y lámparas cálidas marcan los objetos importantes."}
+ ]},
+ {id:"s2",title:"Puntos de vista y viaje de cámara",sub:"Marker3D y un Tween que mueve la cámara",xp:25,steps:[
+  {type:"info",kicker:"Concepto",title:"Chinches invisibles en el espacio",html:`<p>Un <code class="i">Marker3D</code> es un nodo invisible que solo guarda una <b>posición y una rotación</b>. Lo usamos para marcar desde dónde mira la cámara en cada parte del menú.</p>
+   <ol><li>Agregá un <code class="i">Node3D</code> llamado <b>Vistas</b>.</li>
+   <li>Adentro, tres <code class="i">Marker3D</code>: <b>General</b>, <b>Mapa</b> y <b>Radio</b>.</li>
+   <li>Para ubicar cada uno sin sufrir: mové la vista del editor (clic derecho + WASD) hasta que veas el mapa como querés. Seleccioná el Marker3D <b>Mapa</b> y usá <b>Perspectiva → Alinear transformación con la vista</b> (Ctrl + Alt + M). El marcador queda justo donde está tu vista.</li></ol>`},
+  {type:"info",kicker:"Código",title:"Llevar la cámara de un marcador a otro",html:`<p>Hacé clic derecho en SalaDeGuerra → <b>Adjuntar script</b>. Este es el corazón del menú:</p><pre class="code">${hl(VIAJE_GD)}</pre>
+   <ul><li>El <b>diccionario</b> <code class="i">vistas</code> guarda cada marcador con su nombre, así después alcanza con decir <code class="i">ir_a_vista("Mapa")</code>.</li>
+   <li>Un <b>Tween</b> anima algo durante un tiempo. <code class="i">TRANS_SINE</code> y <code class="i">EASE_IN_OUT</code> hacen que la cámara arranque suave y frene suave, como un travelling de cine.</li>
+   <li><code class="i">interpolate_with</code> calcula una posición y una rotación intermedias entre dos transform. Con t = 0 está en el origen, con 0.5 a mitad de camino y con 1 en el destino. Gira la cámara prolijo, sin deformarla.</li>
+   <li><code class="i">en_movimiento</code> evita que, si hacés clic durante el viaje, arranque otro viaje encima.</li></ul>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Mové la cámara por la sala",html:`<p>Usá los botones de abajo: cada uno llama a <code class="i">ir_a_vista()</code> con un Marker3D distinto. Probá una <b>duración</b> de 0.3 (brusco) y de 3 (cinematográfico).</p>`,lab:"salaCamara"},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué guarda un Marker3D?",options:["Un modelo 3D","Solo una posición y una rotación, sin dibujar nada","Un sonido","Un script"],answer:1,explain:"Es una marca invisible: perfecta para decir \"la cámara va acá\"."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Para qué sirve la variable en_movimiento?",options:["Para que la cámara vaya más rápido","Para ignorar clics mientras la cámara viaja, y que no arranquen dos viajes a la vez","Para cambiar el color","No sirve"],answer:1,explain:"Si no la usás, un clic durante el viaje arranca otro Tween encima y la cámara se vuelve loca."},
+  {type:"fill",kicker:"Completá",q:"Crear la animación de la cámara:",code:`var tween := ____()`,options:["create_tween","Tween.new","animate","get_tree"],answer:0,explain:"create_tween() crea un Tween ligado al nodo. Si el nodo se borra, el Tween también."}
+ ]},
+ {id:"s3",title:"Objetos que se iluminan y se tocan",sub:"Area3D, clics del mouse, cartel y brillo",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Zonas que escuchan al mouse",html:`<p>Para que Godot sepa que tocaste el mapa, se pone encima un <code class="i">Area3D</code>: una zona invisible que avisa cuando el mouse pasa por arriba o hace clic.</p>
+   <ol><li>Agregá un <code class="i">Area3D</code> llamado <b>ObjetoMapa</b> y movele adentro el modelo del mapa.</li>
+   <li>Como hijo del Area3D, agregá un <code class="i">CollisionShape3D</code> y en <b>Shape</b> elegí <b>Nuevo BoxShape3D</b>. Ajustá su tamaño para que cubra el mapa: es la zona que se puede tocar.</li>
+   <li>En el Inspector del Area3D, pestaña <b>Nodo → Grupos</b>, agregalo al grupo <code class="i">objeto_menu</code>.</li>
+   <li>Abajo de todo en el Inspector, <b>Add Metadata</b>: agregá <code class="i">vista</code> (String) = <b>Mapa</b> y <code class="i">titulo</code> (String) = <b>CAMPAÑA</b>. Son datos extra que lee el script.</li>
+   <li>Lo mismo para la radio (vista Radio, título OPCIONES) y los teléfonos.</li>
+   <li>El <b>cartel colgante</b> es un <code class="i">Label3D</code>: un texto que vive en el mundo 3D.</li></ol>`},
+  {type:"info",kicker:"Código",title:"Escuchar al mouse",html:`<pre class="code">${hl(TOCAR_GD)}</pre>
+   <ul><li><b>Importante:</b> en Godot 4 los Area3D no reciben clics hasta que activás <code class="i">physics_object_picking</code>.</li>
+   <li><code class="i">get_nodes_in_group</code> trae todos los objetos del grupo, así conectás todo con un solo <code class="i">for</code>.</li>
+   <li><code class="i">.bind(objeto)</code> le agrega a la función el objeto que avisó, para saber cuál fue.</li>
+   <li><code class="i">get_meta("vista")</code> lee el metadato que pusiste en el Inspector.</li></ul>`},
+  {type:"info",kicker:"Código",title:"Que se ilumine un poco más",html:`<p>Para que el objeto "brille" sin cambiar su textura, se le pone encima una capa de luz que <b>suma</b> (<code class="i">BLEND_MODE_ADD</code>): un <code class="i">material_overlay</code>. Si además le agregás al Area3D un <code class="i">OmniLight3D</code> llamado <b>Luz</b> con energía 0, se prende de a poco como una lámpara.</p><pre class="code">${hl(BRILLO_GD)}</pre>
+   <p><code class="i">a if condición else b</code> elige un valor u otro en una sola línea.</p>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"Pasá el mouse por la sala",html:`<p>Pasá el mouse por el <b>mapa</b>, la <b>radio</b> y los <b>teléfonos</b>: se iluminan y el cartel cambia. Hacé clic para viajar y <b>clic derecho</b> o <b>Esc</b> para volver. Probá una intensidad de 0.05 (sutil) y de 0.6 (muy brillante).</p>`,lab:"salaTocar"},
+  {type:"quiz",kicker:"Pregunta",q:"Armaste todo pero al hacer clic en el mapa no pasa nada. ¿Qué es lo más probable?",options:["Falta activar get_viewport().physics_object_picking = true (o el CollisionShape3D no cubre el mapa)","El mapa es muy grande","Falta la música","La cámara está apagada"],answer:0,explain:"Sin physics_object_picking los Area3D no reciben el mouse. Y sin CollisionShape3D no hay zona que tocar."},
+  {type:"fill",kicker:"Completá",q:"Leer a qué vista lleva el objeto:",code:`ir_a_vista(objeto.____("vista"))`,options:["get_meta","get_node","get_vista","meta"],answer:0,explain:"get_meta lee los metadatos que agregaste en el Inspector."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué el brillo usa BLEND_MODE_ADD?",options:["Para que el objeto desaparezca","Para sumar luz encima del objeto sin tapar su textura","Para que haga ruido","Para que sea transparente del todo"],answer:1,explain:"ADD suma el color encima: el mapa se sigue viendo igual, solo más claro."}
+ ]},
+ {id:"s4",title:"Elegir dónde empezar en el mapa",sub:"Pines de misión, panel y empezar el nivel",xp:30,steps:[
+  {type:"info",kicker:"Concepto",title:"Pines que son misiones",html:`<p>Cada lugar donde podés empezar es un <b>pin</b> clavado en el mapa. Cada pin es su propia escenita: un <code class="i">Area3D</code> con un <code class="i">CollisionShape3D</code> chiquito y un <code class="i">MeshInstance3D</code> (una esfera roja). Le ponés este script, que guarda los datos de la misión:</p><pre class="code">${hl(PIN_GD)}</pre>
+   <ul><li><code class="i">class_name PinMision</code> le da nombre al tipo, para usarlo en otros scripts.</li>
+   <li><code class="i">@export_file("*.tscn")</code> muestra en el Inspector un selector de archivo: elegís el nivel con el mouse.</li>
+   <li><code class="i">_input_event</code> es la versión del clic que va dentro del propio pin.</li></ul>
+   <p>Guardalo como <code class="i">pin_mision.tscn</code>, instancialo varias veces dentro de <b>PinesMapa</b> (con el ícono de la cadenita) y ubicá cada uno sobre su lugar del mapa.</p>`},
+  {type:"info",kicker:"Código",title:"El panel de la misión",html:`<p>El panel es interfaz 2D encima de todo: <code class="i">CanvasLayer → PanelContainer</code> con dos <code class="i">Label</code> (Titulo y Descripcion) y un <code class="i">Button</code> (BotonEmpezar). Empieza oculto: en el árbol, tocá el ojito.</p><pre class="code">${hl(MISION_GD)}</pre>
+   <ul><li>Los pines solo se ven y se pueden tocar cuando la cámara llegó al mapa: llamá a <code class="i">activar_pines(nombre == "Mapa")</code> al final de <code class="i">ir_a_vista</code>.</li>
+   <li><b>Esc</b> o el botón Volver llevan la cámara de nuevo a la vista General.</li></ul>`},
+  {type:"lab",kicker:"Laboratorio 3D",title:"El menú completo",html:`<p>Tocá el <b>mapa</b>. Cuando la cámara llegue, pasá el mouse por los <b>pines rojos</b>: crecen y se ponen amarillos. Tocá uno para ver la misión y apretá <b>Empezar</b>. Con <b>clic derecho</b>, <b>Esc</b> o <b>← Volver</b> regresás a la sala. Abajo ves en vivo qué funciones se van ejecutando.</p>`,lab:"salaMision"},
+  {type:"quiz",kicker:"Pregunta",q:"¿Por qué los pines se activan solo cuando la cámara está en el mapa?",options:["Para ahorrar memoria","Para no elegir una misión por error desde la vista general, cuando los pines son chiquitos","Porque Godot no deja","No hace falta"],answer:1,explain:"Cada cosa en su momento: primero elegís el mapa, después la misión."},
+  {type:"fill",kicker:"Completá",q:"El pin avisa que lo eligieron:",code:`elegido.____(self)`,options:["emit","connect","call","show"],answer:0,explain:"La señal lleva al propio pin (self), así el menú sabe qué misión es."},
+  {type:"quiz",kicker:"Pregunta",q:"¿Qué hace change_scene_to_file(mision_elegida.escena)?",options:["Cierra el juego","Cambia del menú a la escena del nivel guardada en ese pin","Mueve la cámara","Reinicia el menú"],answer:1,explain:"Cada pin guarda la ruta de su nivel. Con la lección de transición le podés sumar un fundido a negro."},
+  {type:"info",kicker:"¡Listo!",title:"Tu menú de sala de guerra",html:`<p>Ya tenés el menú completo: la sala, la cámara que viaja, los objetos que se iluminan y los pines para elegir dónde empezar. Ideas para seguir:</p>
+   <ul><li>Que la <b>radio</b> abra el panel de opciones (próxima lección).</li><li>Un <b>fundido a negro</b> al empezar la misión (la lección de transición).</li>
+   <li>Sonido de teletipo, radio y lluvia afuera. Una niebla leve en el WorldEnvironment.</li>
+   <li>Usar <code class="i">GestorMisiones</code> (Unidad 4) para mostrar con un tilde las misiones ya completadas.</li></ul>`}
+ ]}
+];
+LESSONS.splice(1,1,...SALA_LECCIONES);
 
 const COURSES={
  cero:{key:"cero",next:"gds",tag:"GDScript · Nivel 0",title:"De 0 en programación",sub:"Lo más básico de lo básico: qué es una instrucción, un script, una función, qué es _ready() y qué es una variable.",lessons:CERO},
@@ -1984,7 +2345,7 @@ const COURSES={
  gds4:{key:"gds4",next:"gds5",tag:"GDScript · Nivel 4",title:"Arquitectura de juego",sub:"Instanciar escenas, componentes, bus de eventos, grupos, object pooling y guardar la partida en JSON.",lessons:GDS4},
  gds5:{key:"gds5",next:"gds6",tag:"GDScript · Nivel 5",title:"Matemática 3D para juegos",sub:"Vectores, producto punto y cono de visión, girar hacia objetivos, interpolar y rayos por código.",lessons:GDS5},
  gds6:{key:"gds6",next:"menu",tag:"GDScript · Nivel 6",title:"GDScript profesional",sub:"Medir y optimizar, código que no traba, call_deferred, organizar el proyecto con Git y exportar el juego.",lessons:GDS6},
- menu:{key:"menu",next:"fps2",tag:"Curso FPS 3D · Unidad 1",title:"El menú principal",sub:"Menú plano, menú con fondo 3D cinematográfico, opciones y transición al nivel.",lessons:LESSONS},
+ menu:{key:"menu",next:"fps2",tag:"Curso FPS 3D · Unidad 1",title:"El menú principal",sub:"Menú plano, menú 3D tipo sala de guerra (tocás el mapa, la cámara viaja y elegís la misión), opciones y transición al nivel.",lessons:LESSONS},
  fps2:{key:"fps2",next:"fps3",tag:"Curso FPS 3D · Unidad 2",title:"El jugador",sub:"La escena del jugador, Mapa de entrada, mirar con el mouse, caminar, saltar, correr y agacharse.",lessons:FPS2},
  fps3:{key:"fps3",next:"mis",tag:"Curso FPS 3D · Unidad 3",title:"Armas y disparo",sub:"El arma en la escena, disparo con RayCast3D, cadencia, munición, recarga, retroceso y dianas con vida.",lessons:FPS3},
  mis:{key:"mis",next:"mapa",tag:"Curso FPS 3D · Unidad 4",title:"Misiones",sub:"Objetivos en orden, zonas con Area3D, gestor de misiones, objetivos contra reloj, HUD y guardado del progreso.",lessons:MIS},

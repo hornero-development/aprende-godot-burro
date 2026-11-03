@@ -369,6 +369,14 @@ pre.code select.pv{background:#1b3248;border:1px solid var(--accent);color:#ffd4
 .labview .banner{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.9);font-family:var(--f-display);font-weight:700;font-size:clamp(22px,4.5vw,40px);letter-spacing:.08em;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.8);opacity:0;transition:opacity .5s,transform .5s;white-space:nowrap}
 .labview .banner.on{opacity:1;transform:translate(-50%,-50%) scale(1);color:#7ee2a8}
 .labview .banner.on.bad{color:#ff8a80}
+.labview .salapanel{position:absolute;right:14px;top:14px;width:min(46%,300px);pointer-events:auto;background:rgba(14,20,28,.92);border:1px solid rgba(227,167,91,.6);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px}
+.labview .salapanel small{display:block;font-family:var(--f-display);letter-spacing:.16em;color:var(--burro);font-size:11px;font-weight:700}
+.labview .salapanel b{display:block;font-family:var(--f-display);font-size:18px;margin:2px 0 6px}
+.labview .salapanel p{margin:0 0 10px;color:#c9d3df}
+.labview .salapanel div{display:flex;gap:8px;flex-wrap:wrap}
+.labview .salapanel button{border:0;border-radius:8px;padding:7px 14px;font-weight:800;background:var(--burro);color:#2a1704}
+.labview .salapanel button.g{background:#2a3748;color:#fff}
+.labview .salavolver{position:absolute;left:12px;top:12px;pointer-events:auto;border:0;border-radius:8px;padding:6px 12px;font-weight:800;background:rgba(14,20,28,.85);color:#fff}
 .labview .hudmsg{position:absolute;left:50%;top:62%;transform:translateX(-50%);font-weight:800;color:#fff;text-shadow:0 1px 4px #000;font-size:15px;white-space:nowrap}
 pre.code input.pv{width:7ch;background:#1b3248;border:1px solid var(--accent);color:#ffd479;border-radius:5px;font:inherit;padding:0 4px;text-align:center}
 .labview{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#1f2833;margin-bottom:10px}

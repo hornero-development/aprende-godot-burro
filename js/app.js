@@ -4,6 +4,7 @@ addEventListener("keydown",e=>{if(!S.lab||!S.lab.keys||e.target.closest&&e.targe
   if(e.code==="Space")jumpQ=true;if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code))e.preventDefault()});
 addEventListener("keyup",e=>KEYS.delete(e.code));
 function buildLab(kind,p,readout){
+  if(LABS[kind].sala)return buildSalaLab(LABS[kind],p,readout);
   if(LABS[kind].topdown)return buildTopLab(LABS[kind],p,readout);
   if(LABS[kind].fsm)return buildFSMLab(LABS[kind],p,readout);
   if(LABS[kind].map)return buildMapLab(LABS[kind],p,readout);
