@@ -130,11 +130,20 @@ function mountPreview(host,{mode="3d",openOptions=false,onLog,console:showCon=tr
 let G=null; // estado del editor
 const NAVOF={cero:"gds",gds:"gds",gds2:"gds",gds3:"gds",gds4:"gds",gds5:"gds",gds6:"gds",menu:"lecciones",fps2:"lecciones",fps3:"lecciones",mis:"lecciones",mapa:"lecciones"};
 const FPS_COURSES=["menu","fps2","fps3","mis","mapa"];
-function nextFPS(){for(const c of FPS_COURSES){const i=COURSES[c].lessons.findIndex(l=>!progress.done.includes(l.id));if(i>=0)return {c,i,all:false}}return {c:"menu",i:0,all:true}}
+const MENU_RUTAS={"2d":["l1","l3","l4"],"3d":["s1","s2","s3","s4","l3","l4"]};
+const MENU_REQ={l1:[],s1:[],s2:["s1"],s3:["s2"],s4:["s3"],l3:[["l1","s4"]],l4:["l3"]};
+const MENU_TAG={l1:"2D",s1:"3D",s2:"3D",s3:"3D",s4:"3D",l3:"2D y 3D",l4:"2D y 3D"};
+function menuIdx(id){return LESSONS.findIndex(l=>l.id===id)}
+function menuSiguiente(){const r=progress.menuRuta||(courseDone("menu")>0?(progress.done.includes("l1")?"2d":"3d"):null);if(!r)return null;const id=MENU_RUTAS[r].find(x=>!progress.done.includes(x));return id?menuIdx(id):null}
+function elegirMenu(r){progress.menuRuta=r;store.set("agb-progreso",progress);const i=menuSiguiente();startLesson("menu",i===null?menuIdx(MENU_RUTAS[r][0]):i)}
+function nextFPS(){
+  if(!progress.menuRuta&&courseDone("menu")===0)return {elegir:true,c:"menu",i:0,all:false};
+  const mi=menuSiguiente();if(mi!==null)return {c:"menu",i:mi,all:false};
+  for(const c of FPS_COURSES){if(c==="menu")continue;const i=COURSES[c].lessons.findIndex(l=>!progress.done.includes(l.id));if(i>=0)return {c,i,all:false}}return {c:"menu",i:0,all:true}}
 function setNav(v){document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===v))}
 function go(v){if(!user){renderWelcome();return}
   if(v==="lecciones")renderLessons();else if(v==="godot")renderGodot();else if(v==="patio")renderPatio();
-  else if(v==="empezar"){const n=nextFPS();startLesson(n.c,n.i)}
+  else if(v==="empezar"){const n=nextFPS();if(n.elegir){renderLessons();const e=$("#elegir-menu");if(e)e.scrollIntoView()}else startLesson(n.c,n.i)}
   else if(v==="usuario"){renderWelcome(true)}
   else if(v==="gds"){renderGDSChoice()}
   else renderInicio();
@@ -142,7 +151,9 @@ function go(v){if(!user){renderWelcome();return}
 function nextIn(c){const ls=COURSES[c].lessons,i=ls.findIndex(l=>!progress.done.includes(l.id));return i<0?0:i}
 function courseDone(c){return COURSES[c].lessons.filter(l=>progress.done.includes(l.id)).length}
 function nextLesson(){for(const c of ["cero","gds","menu"]){const i=COURSES[c].lessons.findIndex(l=>!progress.done.includes(l.id));if(i>=0)return {c,i}}return {c:"gds",i:0}}
-function isUnlocked(c,i){return i===0||progress.done.includes(COURSES[c].lessons[i-1].id)}
+function isUnlocked(c,i){
+  if(c==="menu"){const id=LESSONS[i].id,req=MENU_REQ[id]||[];const ok=x=>progress.done.includes(x);return req.every(r=>Array.isArray(r)?r.some(ok):ok(r))}
+  return i===0||progress.done.includes(COURSES[c].lessons[i-1].id)}
 const TOTAL=CERO.length+GDS.length+LESSONS.length;
 
 /* =================== bienvenida / usuario =================== */
@@ -185,7 +196,7 @@ function renderInicio(){
       <div>
         <div class="hello"><small>BIENVENIDO AL CUARTEL</small><h1>Hola, ${esc(user.name)}</h1></div>
         <nav class="hmenu" aria-label="Menú principal">
-          <button class="hbtn" data-go="empezar">Empezar lección<small>Curso FPS 3D · ${nf.all?"Repasar: ":""}${esc(COURSES[nf.c].lessons[nf.i].title)}</small></button>
+          <button class="hbtn" data-go="empezar">Empezar lección<small>Curso FPS 3D · ${nf.elegir?"Elegí tu menú: 2D plano o 3D sala de guerra":(nf.all?"Repasar: ":"")+esc(COURSES[nf.c].lessons[nf.i].title)}</small></button>
           <button class="hbtn" data-go="gds">GDScript<small>7 niveles: de 0 en programación a profesional · ${gd} de ${gdT} lecciones</small></button>
           <button class="hbtn" data-go="lecciones">Elegir lecciones<small>Curso FPS 3D · ${fpsDone} de ${fpsTot} completas · ${progress.xp} XP</small></button>
           <button class="hbtn" data-go="godot">Godot interactivo<small>Explorá el editor y descubrí para qué sirve cada botón</small></button>
@@ -228,9 +239,11 @@ function coursePath(c){const C=COURSES[c];return `<section class="unit" id="curs
     <div class="path">${C.lessons.map((l,i)=>{const d=progress.done.includes(l.id),u=isUnlocked(c,i);
       return `<button class="node ${d?"done":""} ${u?"":"locked"}" data-c="${c}" data-i="${i}" ${u?"":'aria-disabled="true"'}>
         <span class="disc">${u?(d?okSvg:i+1):lockSvg}</span>
-        <span class="txt"><b>${esc(l.title)}</b><span>${esc(l.sub)} · ${l.xp} XP${u?"":" · completá la anterior"}</span></span></button>`}).join("")}
+        <span class="txt"><b>${esc(l.title)}${c==="menu"?` <em class="mtag">${MENU_TAG[l.id]}</em>`:""}</b><span>${esc(l.sub)} · ${l.xp} XP${u?"":c==="menu"&&MENU_TAG[l.id]==="2D y 3D"?" · terminá el menú 2D o el 3D":" · completá la anterior"}</span></span></button>`}).join("")}
     </div></section>`}
-function bindPaths(){app.querySelectorAll(".node").forEach(n=>n.onclick=()=>{const c=n.dataset.c,i=+n.dataset.i;if(isUnlocked(c,i))startLesson(c,i)})}
+function bindPaths(){app.querySelectorAll(".node").forEach(n=>n.onclick=()=>{const c=n.dataset.c,i=+n.dataset.i;if(!isUnlocked(c,i))return;
+  if(c==="menu"&&!progress.menuRuta&&MENU_TAG[LESSONS[i].id]!=="2D y 3D"){progress.menuRuta=MENU_TAG[LESSONS[i].id].toLowerCase();store.set("agb-progreso",progress)}
+  startLesson(c,i)})}
 function renderGDSChoice(){
   stop3D();setNav("gds");location.hash="gdscript";
   const card=(c,rec,pts,btn)=>{const C=COURSES[c],d=courseDone(c),n=C.lessons.length;
@@ -259,13 +272,25 @@ function renderGDSChoice(){
 
 function renderLessons(){
   stop3D();setNav("lecciones");location.hash="lecciones";
-  app.innerHTML=`${coursePath("menu")}${coursePath("fps2")}${coursePath("fps3")}${coursePath("mis")}${coursePath("mapa")}
+  const tarj=(r,titulo,desc,pts,rec)=>{const ids=MENU_RUTAS[r],d=ids.filter(x=>progress.done.includes(x)).length,n=ids.length,el=progress.menuRuta===r;
+    return `<article class="ccard ${el?"rec":""}"><div class="tag"><span>MENÚ ${r.toUpperCase()}</span>${el?"<em>Tu elección</em>":rec?`<em>${rec}</em>`:""}</div>
+      <h2>${titulo}</h2><p>${desc}</p><ul>${pts.map(x=>`<li>${x}</li>`).join("")}</ul>
+      <div class="bar"><span style="width:${d/n*100}%"></span></div><div class="meta">${d} de ${n} lecciones${d===n?" · completo":""}</div>
+      <button class="btn ${el||(!progress.menuRuta&&r==="2d")?"":"ghost"}" data-ruta="${r}">${d===0?(r==="2d"?"Empezar menú 2D":"Empezar menú 3D"):d===n?"Repasar":"Seguir"}</button></article>`};
+  app.innerHTML=`<section class="unit" id="elegir-menu"><div class="unit-head"><span class="tag">Curso FPS 3D · Unidad 1</span><h2>¿Qué menú querés hacer?</h2>
+      <p>Elegí uno para empezar. Las dos rutas terminan con las lecciones de Opciones y Transición al nivel, y después podés hacer la otra cuando quieras.</p></div>
+    <div class="choice">
+      ${tarj("2d","Menú 2D plano","Botones sobre una imagen de fondo. Rápido de hacer y perfecto para aprender las bases de la interfaz.",["Nodos Control y VBoxContainer","Botones y señales pressed","Cambiar de escena"],"Ideal si recién empezás")}
+      ${tarj("3d","Menú 3D: sala de guerra","Una habitación 3D: los objetos se iluminan, tocás el mapa, la cámara viaja y elegís la misión en el mapa.",["Armar la sala desde cero","Marker3D y cámara que viaja","Objetos que se iluminan con el mouse","Pines de misión en el mapa"],"Más vistoso")}
+    </div></section>
+  ${coursePath("menu")}${coursePath("fps2")}${coursePath("fps3")}${coursePath("mis")}${coursePath("mapa")}
   <section class="unit">
     <div class="unit-head"><span class="tag">Próximas unidades del FPS</span><h2>Del menú al campo de batalla</h2></div>
     <div class="soon">${SOON.map((s,i)=>`<div class="card"><span class="lock">Unidad ${i+6}</span><b>${s[0]}</b>${s[1]}</div>`).join("")}</div>
   </section>
   <p class="lead">¿Te cuesta el código de las lecciones? Aprendé GDScript primero en la sección <button class="btn ghost" id="to-gds" style="padding:6px 12px;font-size:14px">GDScript</button></p>`;
   bindPaths();$("#to-gds").onclick=()=>go("gds");
+  app.querySelectorAll("[data-ruta]").forEach(b=>b.onclick=()=>elegirMenu(b.dataset.ruta));
 }
 
 /* =================== reproductor de lección =================== */
@@ -321,7 +346,9 @@ function finish(){
   const ls=COURSES[L.c].lessons,les=ls[L.i],first=!progress.done.includes(les.id),gain=first?les.xp:5;
   if(first)progress.done.push(les.id);progress.xp+=gain;store.set("agb-progreso",progress);
   const grew=registerStudy();updStats();const st=currentStreak();
-  const nextI=L.i+1<ls.length?L.i+1:null,c=L.c;
+  const c=L.c;let nextI=L.i+1<ls.length?L.i+1:null;
+  if(c==="menu"){const r=(progress.menuRuta&&MENU_RUTAS[progress.menuRuta].includes(les.id))?progress.menuRuta:(les.id.startsWith("s")?"3d":"2d"),orden=MENU_RUTAS[r],k=orden.indexOf(les.id);
+    const sig=k>=0?orden.slice(k+1).find(x=>!progress.done.includes(x))||orden[k+1]:null;nextI=sig?menuIdx(sig):null}
   const nx=COURSES[c].next,courseEnd=nextI===null&&!!nx;
   app.innerHTML=`<div class="lesson"><div class="step finish">
     <div class="kicker">${nextI===null?((c==="cero"||c.startsWith("gds"))?`¡${COURSES[c].tag.split("· ")[1]} completo!`:"¡Unidad completa!"):"Lección completa"}</div><div class="big">+${gain} XP</div>
