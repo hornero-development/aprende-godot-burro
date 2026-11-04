@@ -32,8 +32,20 @@ Object.assign(GG_PROPS,{
  CanvasLayer:[["#CanvasLayer"],["Layer","1"],["Visible","on"],["Offset","0  0"]],
  PanelContainer:[["#Control"],["@Layout"],["Layout Mode","Anchors"],["Anchors Preset","Top Left"],["@Visibility"],["Visible","on"]]
 });
+[["CharacterBody3D","3d","El cuerpo del jugador."],["DirectionalLight3D","3d","Luz como el sol."],["GPUParticles3D","3d","Partículas."],["StaticBody3D","3d","Cuerpo quieto."]].forEach(([n,c,d])=>{if(typeof TYPES!=="undefined"&&!TYPES[n])TYPES[n]={c,d}});
+Object.assign(GG_PROPS,{
+ HSlider:[["#Range"],["Min Value","0"],["Max Value","100"],["Step","1"],["Value","0"],["#Control"],["@Layout"],["Custom Minimum Size","0  0"]],
+ CheckButton:[["#Button"],["Text",""],["#BaseButton"],["Button Pressed","off"],["Toggle Mode","on"],["#Control"],["@Layout"],["Custom Minimum Size","0  0"]],
+ ColorRect:[["#ColorRect"],["Color","color:#ffffff"],["#Control"],["@Layout"],["Anchors Preset","Top Left"],["@Mouse"],["Filter","Stop"],["#CanvasItem"],["@Visibility"],["Modulate","color:#ffffff"]],
+ CharacterBody3D:[["#CharacterBody3D"],["Motion Mode","Grounded"],["Up Direction","0  1  0"],["@Floor"],["Max Angle","45"],["#Node3D"],...GG_T3D],
+ DirectionalLight3D:[["#DirectionalLight3D"],["#Light3D"],["@Light"],["Color","color:#ffffff"],["Energy","1"],["@Shadow"],["Enabled","off"],["#Node3D"],...GG_T3D],
+ GPUParticles3D:[["#GPUParticles3D"],["Emitting","on"],["Amount","8"],["@Drawing"],["Visibility AABB",".."],["Process Material","<empty>"],["@Draw Passes"],["Pass 1","<empty>"]],
+ StaticBody3D:[["#StaticBody3D"],["Physics Material Override","<empty>"],["#CollisionObject3D"],["@Collision"],["Layer","1"],["#Node3D"],...GG_T3D]
+});
 const GG_SIGNALS={
  Button:[["BaseButton",["button_down()","button_up()","pressed()","toggled(toggled_on: bool)"]],["Control",["focus_entered()","focus_exited()","gui_input(event: InputEvent)","mouse_entered()","mouse_exited()","resized()"]],["CanvasItem",["draw()","hidden()","visibility_changed()"]],["Node",["ready()","tree_entered()","tree_exited()"]]],
+ HSlider:[["Range",["changed()","value_changed(value: float)"]],["Slider",["drag_ended(value_changed: bool)","drag_started()"]],["Control",["focus_entered()","mouse_entered()","resized()"]],["Node",["ready()"]]],
+ CheckButton:[["BaseButton",["button_down()","button_up()","pressed()","toggled(toggled_on: bool)"]],["Control",["focus_entered()","mouse_entered()","resized()"]],["Node",["ready()"]]],
  Control:[["Control",["focus_entered()","focus_exited()","gui_input(event: InputEvent)","mouse_entered()","mouse_exited()","resized()"]],["CanvasItem",["draw()","hidden()","visibility_changed()"]],["Node",["ready()","tree_entered()","tree_exited()"]]]
 };
 const GG_SCRIPT_TPL=`extends Control
@@ -78,7 +90,7 @@ function ggInspector(st){
       <div class="gg-props">${gs.length?gs.map(g=>`<div class="gg-prop" data-t="grp-${g}"><span><span class="gg-chk on"></span>${esc(g)}</span><span></span></div>`).join(""):'<div class="gg-muted gg-pad">Sin grupos todavía.</div>'}</div>`}
   if(st.dock==="sig"){
     const groups=GG_SIGNALS[t]||GG_SIGNALS.Control,con=(st.conn&&st.conn[st.sel])||{};
-    return `<div class="gg-ibar"><span class="gg-search">Filter Signals</span></div><div class="gg-sigs">`+groups.map(([g,list])=>`<div class="gg-grp">${nodeIcon(g==="BaseButton"?"Button":g==="Node"?"Node":"Control")}${g}</div>`+
+    return `<div class="gg-ibar"><span class="gg-search">Filter Signals</span></div><div class="gg-sigs">`+groups.map(([g,list])=>`<div class="gg-grp">${nodeIcon(g==="BaseButton"?"Button":g==="Range"||g==="Slider"?"HSlider":g==="Node"?"Node":"Control")}${g}</div>`+
       list.map(s=>{const k=s.split("(")[0],c=con[k];return `<div class="gg-srow ${c?"on":""}" data-t="sig-${k}">${ic("signal")}<span>${esc(s)}</span></div>`+
         (c?`<div class="gg-srow sub" data-t="conn-${k}"><span class="gg-arrow">↳</span>${esc(c)}</div>`:"")}).join("")).join("")+
       `</div><div class="gg-sigfoot"><button data-t="sig-connect">Connect...</button></div>`;
@@ -108,13 +120,16 @@ function ggCanvas(st){
   const tools=["select","move","rotate","scale","ruler","lock","group","magnet"].map((n,i)=>`<span class="gg-tb ${i===0?"on":""}" ${i===0?'data-t="tool-select"':""}>${ic(n)}</span>`).join("");
   const anchor=isUI?`<span class="gg-sepv"></span><span class="gg-tb gg-anchor" data-t="anchor">${ggAnchorIcon()}</span>`:"";
   const has=n=>(st.tree||[]).some(x=>x[0]===n);
-  const btns=(st.tree||[]).filter(x=>x[1]==="Button").map(x=>`<span class="gg-cbtn ${x[0]===st.sel?"sel":""}" data-t="cv-${x[0]}">${esc(ggVal(st,x[0],"Text","")||" ")}</span>`).join("");
+  const tr=st.tree||[],vi=tr.findIndex(x=>x[0]==="VBox"),vd=vi>=0?tr[vi][2]:0,inV=[];
+  if(vi>=0)for(let j=vi+1;j<tr.length&&tr[j][2]>vd;j++)inV.push(tr[j]);
+  const btns=inV.filter(x=>x[1]==="Button").map(x=>`<span class="gg-cbtn ${x[0]===st.sel?"sel":""}" data-t="cv-${x[0]}">${esc(ggVal(st,x[0],"Text","")||" ")}</span>`).join("");
   const title=has("Titulo")?`<span class="gg-ctitle ${st.centered?"cen":""}" data-t="cv-Titulo">${esc(ggVal(st,"Titulo","Text",""))||"&nbsp;"}</span>`:"";
   const vbox=has("VBox")?`<div class="gg-cvbox ${st.centered?"cen":""} ${st.sel==="VBox"?"sel":""}" data-t="cv-VBox">${btns}</div>`:"";
   const fondo=has("Fondo")&&ggVal(st,"Fondo","Texture","<empty>")!=="<empty>"?'<div class="gg-cfondo"></div>':"";
+  const fund=has("Fundido")?`<div class="gg-cfund ${st.sel==="Fundido"?"sel":""}" data-t="cv-Fundido" style="background:rgba(0,0,0,${ggVal(st,"Fundido","alpha",0)})"></div>`:"";
   return `<div class="gg-vtb">${tools}${anchor}<span class="gg-sp"></span><span class="gg-muted">View</span></div>
     <div class="gg-canvas" data-t="canvas"><div class="gg-axx"></div><div class="gg-axy"></div>
-      <div class="gg-vrect" data-t="vrect">${st.tree&&st.tree.length&&ggType(st,st.tree[0][0])==="Control"?`<div class="gg-root ${st.sel===st.tree[0][0]?"sel":""}"></div>`:""}${fondo}${title}${vbox}</div></div>
+      <div class="gg-vrect" data-t="vrect">${st.tree&&st.tree.length&&ggType(st,st.tree[0][0])==="Control"?`<div class="gg-root ${st.sel===st.tree[0][0]?"sel":""}"></div>`:""}${fondo}${title}${vbox}${fund}</div></div>
     ${st.anchorMenu?ggAnchorMenu():""}`;
 }
 /* vista 3D: una sala dibujada en perspectiva con SVG. Cada pieza aparece si su nodo está en el árbol. */
@@ -135,6 +150,17 @@ const GG_3D={
  Cartel:{c:[280,58],d:'<text x="280" y="62" text-anchor="middle" font-family="Chakra Petch,Arial" font-weight="700" font-size="15" fill="#f4e6c4">CUARTEL GENERAL</text>'},
  Pin1:{c:[235,165],d:'<circle cx="235" cy="165" r="5" fill="#e33"/>'},Pin2:{c:[300,135],d:'<circle cx="300" cy="135" r="5" fill="#e33"/>'},Pin3:{c:[330,175],d:'<circle cx="330" cy="175" r="5" fill="#e33"/>'},
  Esfera:{c:[280,170],d:'<circle cx="280" cy="170" r="26" fill="#d83a3a"/><circle cx="272" cy="161" r="8" fill="rgba(255,255,255,.35)"/>'},
+ Capsula:{c:[280,250],d:'<rect x="250" y="150" width="60" height="180" rx="30" fill="rgba(90,200,255,.10)" stroke="#5ac8ff" stroke-width="1.6" stroke-dasharray="6 3"/>'},
+ CuerpoJug:{c:[280,250],d:'<rect x="256" y="160" width="48" height="164" rx="24" fill="#c9cdd3"/>'},
+ Cabeza:{c:[280,178],d:'<g stroke-width="2"><path d="M280 178 h14" stroke="#f05a5a"/><path d="M280 178 v-14" stroke="#7ad36a"/><path d="M280 178 l-9 7" stroke="#5a8cf0"/></g>'},
+ CamJug:{c:[280,178],d:'<g stroke="#c58cff" stroke-width="1.3" fill="none"><path d="M270 184 L290 184 L290 172 L270 172 Z" fill="#7d55b5"/><path d="M280 172 L230 110 M280 172 L330 110 M230 110 L330 110" stroke-dasharray="4 3"/></g>'},
+ Montanas:{c:[280,200],d:'<path d="M0 260 L90 150 L150 210 L240 110 L330 200 L410 130 L560 260 Z" fill="#59636e"/><path d="M240 110 L262 135 L248 132 L232 140 Z M410 130 L428 150 L414 148 L398 154 Z M90 150 L106 170 L94 168 L80 174 Z" fill="#eef2f6"/>'},
+ Nieve:{c:[280,120],d:'<g fill="#fff" opacity=".85">'+Array.from({length:40},(_,i)=>`<circle cx="${(i*137)%560}" cy="${(i*71)%300}" r="${i%3?1.3:2}"/>`).join("")+'</g>'},
+ Sol:{c:[470,60],d:'<circle cx="470" cy="60" r="10" fill="#ffe08a"/><path d="M470 60 l-40 50" stroke="#ffe08a" stroke-width="2"/><path d="M426 106 l2 -9 l6 6z" fill="#ffe08a"/>'},
+ PisoNivel:{c:[280,300],d:'<path d="M20 340 L540 340 L440 230 L120 230 Z" fill="#6d7a62" stroke="#8a9a7c"/>'},
+ PisoColision:{c:[280,300],d:'<path d="M20 340 L540 340 L440 230 L120 230 Z" fill="none" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="6 3"/>'},
+ JugInst:{c:[280,250],d:'<rect x="262" y="190" width="36" height="110" rx="18" fill="rgba(90,200,255,.12)" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="5 3"/><path d="M272 206 L288 206 L288 198 L272 198 Z" fill="#7d55b5"/>'},
+ JugRoot:{c:[280,322],d:'<circle cx="280" cy="322" r="3" fill="#fc7f7f"/>'},
  PinCollision:{c:[280,170],d:'<circle cx="280" cy="170" r="32" fill="none" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="5 3"/>'}
 };
 function ggView3D(st){
@@ -142,17 +168,18 @@ function ggView3D(st){
   const t=ggType(st,st.sel);
   const tools=[["select","Q"],["move","W"],["rotate","E"],["scale","R"]].map(([n])=>`<span class="gg-tb ${((st.tool||"select")===n)?"on":""}" data-t="tool-${n}">${ic(n)}</span>`).join("");
   const dark=st.dark?'<rect x="0" y="0" width="560" height="380" fill="rgba(5,8,12,.55)"/>':"";
-  let parts="";Object.keys(GG_3D).forEach(k=>{const ty=ggType(st,k);
+  let parts="";const al=st.alias||{},key=n=>al[n]||n;
+  (st.tree||[]).forEach(([k,ty,dd,fl=""])=>{const sh=GG_3D[key(k)];if(!sh||fl.includes("hid"))return;
     if(ty==="MeshInstance3D"&&ggVal(st,k,"Mesh","<empty>")==="<empty>")return;if(ty==="CollisionShape3D"&&ggVal(st,k,"Shape","<empty>")==="<empty>")return;
-    if(has(k))parts+=`<g data-t="v-${k}">${GG_3D[k].d}</g>`});
+    parts+=`<g data-t="v-${k}">${sh.d}</g>`});
   if(st.dark&&has("Lampara1"))parts+='<defs><radialGradient id="gglamp"><stop offset="0" stop-color="#ffc46e" stop-opacity=".32"/><stop offset="1" stop-color="#ffc46e" stop-opacity="0"/></radialGradient></defs>';
-  const g=GG_3D[st.sel];
+  const g=GG_3D[(st.alias||{})[st.sel]||st.sel];
   const giz=g&&(st.tool==="move")?`<g data-t="gizmo" stroke-width="3"><path d="M${g.c[0]} ${g.c[1]} h40" stroke="#f05a5a"/><path d="M${g.c[0]+40} ${g.c[1]-5} l8 5 l-8 5z" fill="#f05a5a"/>
       <path d="M${g.c[0]} ${g.c[1]} v-40" stroke="#7ad36a"/><path d="M${g.c[0]-5} ${g.c[1]-40} l5 -8 l5 8z" fill="#7ad36a"/><path d="M${g.c[0]} ${g.c[1]} l-26 22" stroke="#5a8cf0"/><path d="M${g.c[0]-30} ${g.c[1]+19} l-4 9 l9 -3z" fill="#5a8cf0"/></g>`:
     g?`<circle cx="${g.c[0]}" cy="${g.c[1]}" r="4" fill="#ff9b3d"/>`:"";
   const sky=st.preview?'<rect width="560" height="380" fill="#20252c"/>':'<defs><linearGradient id="ggsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b6a80"/><stop offset=".52" stop-color="#a7b2bf"/><stop offset=".52" stop-color="#4a4640"/><stop offset="1" stop-color="#2d2a26"/></linearGradient></defs><rect width="560" height="380" fill="url(#ggsky)"/>';
   const grid=st.preview?"":Array.from({length:13},(_,k)=>`<path d="M${-200+k*80} 380 L${200+k*14} 198" stroke="rgba(255,255,255,.12)"/>`).join("")+[210,240,290,380].map(y=>`<path d="M0 ${y} H560" stroke="rgba(255,255,255,.1)"/>`).join("")+'<path d="M0 300 H560" stroke="rgba(240,90,90,.7)"/><path d="M280 380 L280 198" stroke="rgba(90,140,240,.7)"/>';
-  const sel=st.sel&&g&&parts.includes(`data-t="v-${st.sel}"`)?`<g class="gg-selo">${GG_3D[st.sel].d}</g>`:"";
+  const sel=st.sel&&g&&parts.includes(`data-t="v-${st.sel}"`)?`<g class="gg-selo">${g.d}</g>`:"";
   return `<div class="gg-vtb">${tools}<span class="gg-sepv"></span>${["local","lock","group","magnet"].map(n=>`<span class="gg-tb">${ic(n)}</span>`).join("")}<span class="gg-sepv"></span><span class="gg-tb">${ic("cam")}</span><span class="gg-muted" style="margin-left:8px">Transform</span><span class="gg-muted" style="margin-left:10px">View</span></div>
     <div class="gg-canvas gg-c3d" data-t="canvas3d"><svg viewBox="0 0 560 380" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%">${sky}${grid}${parts}${dark}${st.dark&&has("Lampara1")?'<ellipse cx="200" cy="150" rx="150" ry="130" fill="url(#gglamp)"/><ellipse cx="360" cy="150" rx="150" ry="130" fill="url(#gglamp)"/>':""}${sel}${giz}</svg>
       <div class="gg-vpmenu"><span data-t="persp" class="${st.perspMenu?"on":""}">[ Perspective ]</span>${t==="Camera3D"?`<span data-t="preview" class="gg-prevchk"><span class="gg-chk ${st.preview?"on":""}"></span>Preview</span>`:""}</div>
@@ -208,6 +235,14 @@ function ggDialog(d){
       <div class="gg-dfoot"><button class="pri" data-t="dlg-ok">Save</button><button>Cancel</button></div>`;
   if(d.kind==="confirm")inner=`<div class="gg-dt">Please Confirm...</div><div class="gg-dbody"><p style="margin:6px 0 4px">No main scene has ever been defined. Select one?<br>You can change it later in "Project Settings" under the 'application' category.</p></div>
       <div class="gg-dfoot"><button data-t="dlg-select">Select</button><button class="pri" data-t="dlg-current">Select Current</button><button>Cancel</button></div>`;
+  if(d.kind==="settings")inner=`<div class="gg-dt">Project Settings (project.godot)</div><div class="gg-stabs2">${["General","Input Map","Localization","Globals","Plugins","Import Defaults"].map(t=>`<span class="${t===(d.tab||"Input Map")?"on":""}" data-t="set-tab-${t}">${t}</span>`).join("")}</div>
+      <div class="gg-dbody"><div class="gg-frow" style="grid-template-columns:1fr auto auto"><span class="gg-input" data-t="dlg-newaction">${esc(d.newAction||"Add New Action")}${d.newAction?'<span class="gg-caret"></span>':""}</span><button data-t="dlg-addaction" class="gg-btn">${ic("plus")}Add</button><span class="gg-muted"><span class="gg-chk"></span>Show Built-in Actions</span></div>
+      <div class="gg-acts"><div class="gg-acth"><span>Action</span><span>Deadzone</span><span></span></div>${(d.actions||[]).map(([a,evs])=>`<div class="gg-act" data-t="act-${a}">${ic("tridown")}<b>${a}</b><span class="gg-field">0.5</span><span class="gg-acti"><span data-t="act-${a}-add">${ic("plus")}</span><span>✕</span></span></div>`+evs.map(e=>`<div class="gg-act ev" data-t="ev-${a}-${e}"><span>${esc(e)}</span><span></span><span class="gg-acti"><span>✎</span><span>✕</span></span></div>`).join("")).join("")}</div></div>
+      <div class="gg-dfoot"><button class="pri" data-t="dlg-close">Close</button></div>`;
+  if(d.kind==="event")inner=`<div class="gg-dt">Event Configuration for "${esc(d.action)}"</div><div class="gg-dbody">
+      <div class="gg-input gg-listen" data-t="dlg-listen">${d.got?`<b>${esc(d.got)}</b>`:'<span class="gg-muted">Listening for Input...</span>'}</div>
+      <div class="gg-box gg-files" style="height:150px">${["Keyboard Keys","Mouse Buttons","Joypad Buttons","Joypad Axes"].map(x=>`<div>${ic("tri")}${x}</div>`).join("")}</div></div>
+      <div class="gg-dfoot"><button class="pri" data-t="dlg-ok">OK</button><button>Cancel</button></div>`;
   if(d.kind==="meta")inner=`<div class="gg-dt">Add Metadata Property for "${esc(d.node)}"</div><div class="gg-dbody gg-form">
       <div class="gg-frow" data-t="dlg-name"><span>Name:</span><span class="gg-input">${esc(d.name)}<span class="gg-caret"></span></span></div>
       <div class="gg-frow" data-t="dlg-type"><span>Type:</span><span class="gg-input">String ▾</span></div></div>
@@ -241,14 +276,14 @@ function ggStage(st){
     <div class="gg-center">
       <div class="gg-stabs">${tabName?`<span class="on" data-t="scene-tab">${nodeIcon(st.tree&&st.tree[0]?st.tree[0][1]:"Node")}${tabName}${st.dirty?"(*)":""}<em>✕</em></span>`:`<span class="on" data-t="scene-tab">[empty]<em>✕</em></span>`}<span>${ic("plus")}</span></div>
       <div class="gg-main" data-t="main">${center}</div>
-      <div class="gg-bottom"><div class="gg-log">${(st.log||["--- Debug adapter server started on port 6006 ---","--- GDScript language server started on port 6005 ---"]).map(l=>`<div>${esc(l)}</div>`).join("")}</div>
-        <div class="gg-btabs"><span class="on" data-t="tab-out">Output</span><span>Debugger</span><span>Audio</span><span>Animation</span><span>Shader Editor</span><span class="gg-sp"></span><span class="gg-muted">4.7.stable</span></div></div>
+      <div class="gg-bottom">${st.bottom==="audio"?`<div class="gg-log gg-audio"><div class="gg-muted">Bus layout: default_bus_layout.tres</div><div class="gg-bus" data-t="bus-Master"><b>Master</b><span class="gg-meter"><i></i></span><span class="gg-muted">0 dB</span></div></div>`:`<div class="gg-log">${(st.log||["--- Debug adapter server started on port 6006 ---","--- GDScript language server started on port 6005 ---"]).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`}
+        <div class="gg-btabs"><span class="${st.bottom==="audio"?"":"on"}" data-t="tab-out">Output</span><span>Debugger</span><span data-t="tab-audio" class="${st.bottom==="audio"?"on":""}">Audio</span><span>Animation</span><span>Shader Editor</span><span class="gg-sp"></span><span class="gg-muted">4.7.stable</span></div></div>
     </div>
     <div class="gg-right"><div class="gg-tabs"><span data-t="tab-insp" class="${st.dock!=="sig"&&st.dock!=="grp"?"on":""}">Inspector</span><span data-t="tab-sig" class="${st.dock==="sig"?"on":""}">Signals</span>${st.showGroups||st.dock==="grp"?`<span data-t="tab-grp" class="${st.dock==="grp"?"on":""}">Groups</span>`:""}</div>${ggInspector(st)}</div>
   </div>
   ${st.fsMenu?`<div class="gg-pop gg-ctx" style="left:130px;top:${st.fsMenuTop||380}px">${["Open","Copy Path","Copy Absolute Path","Copy UID","-","Rename...","Duplicate...","Move/Duplicate To...","-","Show in File Manager"].map(x=>x==="-"?'<hr>':`<div data-t="ctx-${x}">${x}</div>`).join("")}</div>`:""}
   ${st.pop?`<div class="gg-pop gg-ctx" style="left:${st.pop.x}px;top:${st.pop.y}px;min-width:${st.pop.w||200}px">${st.pop.title?`<div class="gg-muted" style="padding:2px 10px 4px">${st.pop.title}</div>`:""}${st.pop.items.map(x=>x==="-"?"<hr>":`<div data-t="pop-${Array.isArray(x)?x[0]:x}"><span>${Array.isArray(x)?x[0]:x}</span>${Array.isArray(x)?`<span class="gg-muted">${x[1]}</span>`:""}</div>`).join("")}</div>`:""}
-  ${ggDialog(st.dlg)}`;
+  ${ggDialog(st.dlg)}${st.dlg2?ggDialog(st.dlg2).replace('class="gg-dim"','class="gg-dim two"').replace('class="gg-dlg','class="gg-dlg two'):""}`;
 }
 
 /* monta la guía: host = elemento, pasos = [{say, target, tag, ...estado}] */
@@ -257,7 +292,7 @@ function mountGuia(host,guia){
   const pasos=guia.pasos,states=[];let acc={ws:"2d",tree:[],dock:"insp"};
   pasos.forEach(p=>{const {say,target,tag,also,...rest}=p;const vals={...(acc.vals||{})};
     if(rest.vals)Object.entries(rest.vals).forEach(([n,o])=>vals[n]={...(vals[n]||{}),...o});
-    acc={...acc,menu:null,dlg:null,pop:null,perspMenu:false,anchorMenu:false,fsMenu:false,rename:null,hiLines:null,...rest,vals};states.push(acc)});
+    acc={...acc,menu:null,dlg:null,dlg2:null,pop:null,perspMenu:false,anchorMenu:false,fsMenu:false,rename:null,hiLines:null,...rest,vals};states.push(acc)});
   let i=0;
   host.innerHTML=`<section class="guia" aria-label="Dónde se hace en Godot">
     <div class="guia-h"><span class="ears" aria-hidden="true"><i></i><i></i></span><div><div class="kicker" style="margin:0">Hacelo en Godot</div><b>${esc(guia.titulo||"Dónde se toca en el editor")}</b></div></div>

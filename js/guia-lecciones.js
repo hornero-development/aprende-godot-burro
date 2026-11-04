@@ -273,3 +273,195 @@ Object.assign(GUIAS,{
   ]}
  }
 });
+
+/* =================== MENÚ: opciones, fundido y fondo 3D =================== */
+const lineOf=(code,txt)=>code.split("\n").findIndex(l=>l.includes(txt))+1;
+const PL={tab:"menu_plano",saved:true,hasScript:true,ws:"2d",vals:GV,centered:true};
+const T_OPC=(f={})=>[...GT.full({MenuPrincipal:"scr",BotonCampana:"sig",BotonSalir:"sig"}),["Opciones","Control",1,f.Opciones||""],["Volumen","HSlider",2,f.Volumen||""],["PantallaCompleta","CheckButton",2,f.PantallaCompleta||""],["Volver","Button",2,f.Volver||""]];
+const OPC_FS=[["folder","escenas",1],["tscn","menu_plano.tscn",2],["tscn","nivel_1.tscn",2],["folder","scripts",1],["gd","menu.gd",2],["gd","opciones.gd",2]];
+const MENU_FUND=G_FULL.replace(`func _on_boton_campana_pressed() -> void:
+	get_tree().change_scene_to_file("res://escenas/nivel_1.tscn")`,`func _on_boton_campana_pressed() -> void:
+	var tween = create_tween()
+	tween.tween_property($Fundido, "modulate:a", 1.0, 0.6)
+	await tween.finished
+	get_tree().change_scene_to_file("res://escenas/nivel_1.tscn")`);
+
+Object.assign(GUIAS,{
+ l3:{
+  0:{titulo:"Armar el panel de opciones",pasos:[
+    {say:"En <code class=\"i\">menu_plano.tscn</code> seleccioná <b>MenuPrincipal</b>, <b>+</b> → <code class=\"i\">Control</code> y llamalo <b>Opciones</b>. Queda al mismo nivel que VBox (los dos son hijos de MenuPrincipal).",
+     ...PL,fs:OPC_FS.slice(0,5),tree:[...GT.full({MenuPrincipal:"scr",BotonCampana:"sig",BotonSalir:"sig"}),["Opciones","Control",1]],sel:"Opciones",rename:"Opciones",target:"node-Opciones",tag:"Hermano de VBox"},
+    {say:"Con <b>Opciones</b> seleccionado agregá tres hijos: un <code class=\"i\">HSlider</code> llamado <b>Volumen</b>, un <code class=\"i\">CheckButton</code> llamado <b>PantallaCompleta</b> y un <code class=\"i\">Button</code> llamado <b>Volver</b>.",
+     tree:T_OPC(),sel:"Volumen",target:"node-Volumen",tag:"Los tres hijos",also:["node-PantallaCompleta","node-Volver"]},
+    {say:"Seleccioná <b>Volumen</b>. En el Inspector, sección <b>Range</b>: <b>Max Value</b> = <code class=\"i\">1</code>, <b>Step</b> = <code class=\"i\">0.01</code> y <b>Value</b> = <code class=\"i\">1</code>. Así va de 0 (mudo) a 1 (todo).",
+     vals:{Volumen:{"Max Value":"1",Step:"0.01",Value:"1"}},target:"prop-Max Value",tag:"De 0 a 1",also:["prop-Step","prop-Value"]},
+    {say:"El script pide el bus <code class=\"i\">\"Master\"</code>. Lo ves abajo, en la pestaña <b>Audio</b>: es el canal principal por donde sale todo el sonido.",
+     bottom:"audio",target:"bus-Master",tag:"Bus Master",also:["tab-audio"]},
+    {say:"Seleccioná <b>PantallaCompleta</b> y en <b>Text</b> escribí <i>Pantalla completa</i>. A <b>Volver</b> ponele <i>Volver</i>.",
+     bottom:null,sel:"PantallaCompleta",vals:{PantallaCompleta:{Text:"Pantalla completa"},Volver:{Text:"Volver"}},target:"prop-Text",tag:"Texto"},
+    {say:"Opciones tiene que empezar escondido: tocá el <b>ojito</b> a la derecha de <b>Opciones</b>.",
+     sel:"Opciones",target:"eye-Opciones",tag:"Ocultar"},
+    {say:"Con <b>Opciones</b> seleccionado tocá el <b>pergamino con +</b> (Attach Script). Path: <code class=\"i\">res://scripts/opciones.gd</code> → <b>Create</b>.",
+     tree:T_OPC({Opciones:"hid"}).map(x=>x[2]===2&&["Volumen","PantallaCompleta","Volver"].includes(x[0])?[...x.slice(0,3),"hid"]:x),dlg:{kind:"script",path:"res://scripts/opciones.gd"},target:"dlg-Path",tag:"opciones.gd",also:["dlg-ok"]},
+    {say:"Ahora las señales. Seleccioná <b>Volumen</b>, abrí <b>Signals</b> y hacé doble clic en <code class=\"i\">value_changed(value: float)</code>. Conectala a <b>Opciones</b>: Godot crea <code class=\"i\">_on_volumen_value_changed</code>.",
+     fs:OPC_FS,tree:T_OPC({Opciones:"hid scr"}),sel:"Volumen",dock:"sig",target:"sig-value_changed",tag:"Doble clic"},
+    {say:"Lo mismo con <b>PantallaCompleta</b> → <code class=\"i\">toggled(toggled_on: bool)</code>, y con <b>Volver</b> → <code class=\"i\">pressed()</code>. Las tres van a <b>Opciones</b>.",
+     sel:"PantallaCompleta",target:"sig-toggled",tag:"toggled"},
+    {say:"En <code class=\"i\">opciones.gd</code> quedan las tres funciones con su ícono verde. Escribí adentro lo que muestra la lección.",
+     ws:"script",dock:"insp",sel:"Opciones",scriptName:"opciones.gd",tree:T_OPC({Opciones:"hid scr",Volumen:"sig",PantallaCompleta:"sig",Volver:"sig"}),code:OPCIONES_GD,sigLines:[3,7,13],hiLines:[3,4,5],target:"line-3",tag:"Funciones de las señales"},
+    {say:"Falta que el botón <b>Opciones</b> del menú abra el panel: conectá <b>BotonOpciones</b> → <code class=\"i\">pressed()</code> a <b>MenuPrincipal</b> y escribí <code class=\"i\">$Opciones.show()</code> y <code class=\"i\">$VBox.hide()</code> en <code class=\"i\">menu.gd</code>.",
+     ws:"2d",sel:"BotonOpciones",dock:"sig",target:"sig-pressed",tag:"pressed de BotonOpciones"}
+  ]},
+  2:{titulo:"Dónde va esta línea",despues:true,pasos:[
+    {say:"En <code class=\"i\">opciones.gd</code>, dentro de <code class=\"i\">_on_pantalla_completa_toggled</code>, en la parte del <code class=\"i\">if activado:</code>.",
+     ...PL,fs:OPC_FS,ws:"script",scriptName:"opciones.gd",tree:T_OPC({Opciones:"hid scr",Volumen:"sig",PantallaCompleta:"sig",Volver:"sig"}),sel:"Opciones",code:OPCIONES_GD,sigLines:[3,7,13],hiLines:[9],target:"line-9",tag:"Acá"}
+  ]},
+  4:{titulo:"Probarlo",pasos:[
+    {say:"<kbd>F6</kbd> (Run Current Scene) con <code class=\"i\">menu_plano.tscn</code> abierta. Tocá Opciones, mové el volumen, prendé pantalla completa y volvé.",
+     ...PL,fs:OPC_FS,tree:T_OPC({Opciones:"hid scr",Volumen:"sig",PantallaCompleta:"sig",Volver:"sig"}),sel:"MenuPrincipal",target:"run-scene",tag:"Run Current Scene (F6)"}
+  ]}
+ },
+ l4:{
+  0:{titulo:"El telón negro del fundido",pasos:[
+    {say:"Seleccioná <b>MenuPrincipal</b>, <b>+</b> → <code class=\"i\">ColorRect</code> y llamalo <b>Fundido</b>. Tiene que quedar <b>último</b> en la lista: en Godot lo de más abajo se dibuja encima de todo. Si no queda último, arrastralo hasta el final.",
+     ...PL,fs:OPC_FS,tree:[...T_OPC({Opciones:"hid scr",Volumen:"sig",PantallaCompleta:"sig",Volver:"sig"}),["Fundido","ColorRect",1]],sel:"Fundido",rename:"Fundido",target:"node-Fundido",tag:"Último de la lista"},
+    {say:"En el Inspector, <b>Color</b>: elegí negro.",
+     vals:{Fundido:{Color:"color:#000000",alpha:0}},target:"prop-Color",tag:"Negro"},
+    {say:"Para que tape toda la pantalla: tocá el ícono verde de <b>anclas</b> en la barra del 2D y elegí <b>Full Rect</b> (el de abajo a la derecha).",
+     anchorMenu:true,target:"anchor-Full Rect",tag:"Full Rect"},
+    {say:"Abajo en el Inspector, en <b>CanvasItem → Visibility → Modulate</b>, tocá el color y bajá la <b>A</b> (transparencia) a <code class=\"i\">0</code>. Queda invisible hasta que el Tween lo suba a 1.",
+     vals:{Fundido:{"Anchors Preset":"Full Rect"}},expand:{Modulate:[["R","255"],["G","255"],["B","255"],["A","0"]]},target:"prop-A",tag:"A = 0"},
+    {say:"<b>Muy importante:</b> en <b>Mouse → Filter</b> elegí <b>Ignore</b>. Si no, aunque sea invisible, el rectángulo tapa los botones y los clics no llegan.",
+     expand:null,vals:{Fundido:{Filter:"Ignore"}},target:"prop-Filter",tag:"Filter = Ignore"},
+    {say:"En <code class=\"i\">menu.gd</code>, cambiá lo que hace <code class=\"i\">_on_boton_campana_pressed</code>: primero el Tween que oscurece, después <code class=\"i\">await</code> y recién ahí el cambio de escena.",
+     ws:"script",sel:"MenuPrincipal",code:MENU_FUND,sigLines:[8,15],hiLines:[9,10,11,12],target:"line-10",tag:"El fundido"}
+  ]},
+  1:{titulo:"Dónde va el await",despues:true,pasos:[
+    {say:"En <code class=\"i\">menu.gd</code>, justo después de crear el Tween y antes de <code class=\"i\">change_scene_to_file</code>.",
+     ...PL,fs:OPC_FS,ws:"script",tree:[...T_OPC({Opciones:"hid scr"}),["Fundido","ColorRect",1]],sel:"MenuPrincipal",code:MENU_FUND,sigLines:[8,15],hiLines:[11],target:"line-11",tag:"Acá"}
+  ]},
+  3:{titulo:"Probarlo",pasos:[
+    {say:"<kbd>F6</kbd> y tocá <b>Campaña</b>: la pantalla se oscurece y recién después carga el nivel. Si los botones no responden, revisá que Fundido tenga <b>Mouse → Filter = Ignore</b>.",
+     ...PL,fs:OPC_FS,tree:[...T_OPC({Opciones:"hid scr"}),["Fundido","ColorRect",1]],sel:"Fundido",vals:{Fundido:{Color:"color:#000000",Filter:"Ignore",alpha:0}},target:"run-scene",tag:"Run Current Scene (F6)",also:["prop-Filter"]}
+  ]}
+ }
+});
+
+/* =================== UNIDAD 2: EL JUGADOR =================== */
+const JG=JUGADOR_COMPLETO_GD;
+const JFS=[["folder","jugador",1],["tscn","jugador.tscn",2],["gd","jugador.gd",2],["folder","niveles",1],["tscn","prueba.tscn",2]];
+const TJ=(f="")=>[["Jugador","CharacterBody3D",0,f],["CollisionShape3D","CollisionShape3D",1],["Cuerpo","MeshInstance3D",1],["Cabeza","Node3D",1],["Camera3D","Camera3D",2]];
+const ALJ={Jugador:"JugRoot",CollisionShape3D:"Capsula",Cuerpo:"CuerpoJug",Camera3D:"CamJug"};
+const JV={CollisionShape3D:{Shape:"CapsuleShape3D"},Cuerpo:{Mesh:"CapsuleMesh"},Cabeza:{Position:"0  1.6  0"}};
+const JST={project:"Mi FPS",tab:"jugador",ws:"3d",alias:ALJ,vals:JV,fs:JFS};
+const JSCR={...JST,ws:"script",scriptName:"jugador.gd",tree:TJ("scr"),sel:"Jugador",code:JG};
+const jl=t=>lineOf(JG,t);
+const ACC=[["adelante",["W (Physical)"]],["atras",["S (Physical)"]],["izquierda",["A (Physical)"]],["derecha",["D (Physical)"]],["saltar",["Space (Physical)"]],["correr",["Shift (Physical)"]],["agacharse",["C (Physical)"]],["disparar",["Left Mouse Button"]]];
+const JEXP={Jugador:{script:"jugador.gd",vars:[["Velocidad","6"],["Velocidad Correr","10"],["Fuerza Salto","5"],["Sensibilidad","0.003"]]}};
+
+Object.assign(GUIAS,{
+ f1:{
+  0:{titulo:"Armar la escena del jugador",pasos:[
+    {say:"<b>Scene → New Scene</b> y en el panel Scene tocá <b>Other Node</b>.",
+     ...JST,tab:null,fs:JFS.slice(3),tree:[],target:"root-other",tag:"Other Node"},
+    {say:"Buscá <code class=\"i\">CharacterBody3D</code> y tocá <b>Create</b>. Renombralo <b>Jugador</b>.",
+     dlg:{kind:"newnode",search:"CharacterBody3D",matches:[["CharacterBody3D","CharacterBody3D"]],pick:"CharacterBody3D",desc:"A 3D physics body specialized for characters moved by script."},target:"dlg-item-CharacterBody3D",tag:"CharacterBody3D",also:["dlg-ok"]},
+    {say:"Godot marca un triangulito amarillo al lado: avisa que le falta la forma de choque. Con Jugador seleccionado, <b>+</b> → <code class=\"i\">CollisionShape3D</code>.",
+     tab:"[unsaved]",tree:[["Jugador","CharacterBody3D",0],["CollisionShape3D","CollisionShape3D",1]],sel:"CollisionShape3D",vals:{CollisionShape3D:{Shape:"<empty>"}},target:"node-CollisionShape3D",tag:"Forma de choque"},
+    {say:"En el Inspector, <b>Shape</b> → <b>New CapsuleShape3D</b>. Abrila y poné <b>Height</b> en <code class=\"i\">1.8</code> (la altura de una persona). Con Move subila para que la base quede en el piso.",
+     vals:{CollisionShape3D:{Shape:"CapsuleShape3D"}},expand:{Shape:[["Radius","0.4"],["Height","1.8"]]},target:"prop-Height",tag:"1.8 m",also:["v-CollisionShape3D"]},
+    {say:"Opcional, para verte en el editor: un <code class=\"i\">MeshInstance3D</code> <b>Cuerpo</b> con <b>New CapsuleMesh</b>. Después, desde Jugador, un <code class=\"i\">Node3D</code> llamado <b>Cabeza</b>.",
+     expand:null,tree:TJ().slice(0,4),sel:"Cabeza",target:"node-Cabeza",tag:"Cabeza (Node3D)",also:["node-Cuerpo"]},
+    {say:"Subí la cabeza a la altura de los ojos: en el Inspector, <b>Transform → Position</b>, poné <b>y</b> = <code class=\"i\">1.6</code>.",
+     target:"prop-Position",tag:"y = 1.6",also:["v-Cabeza"]},
+    {say:"Seleccioná <b>Cabeza</b> y agregale un <code class=\"i\">Camera3D</code>. Queda corrido a la derecha: es hijo de Cabeza, así cuando la cabeza mira arriba, la cámara también.",
+     tree:TJ(),sel:"Camera3D",target:"node-Camera3D",tag:"Hijo de Cabeza",also:["v-Camera3D"]},
+    {say:"Seleccioná <b>Jugador</b> y <b>Attach Script</b>. En <b>Template</b> elegí <i>Object: Empty</i> (el código lo vamos a escribir nosotros) y en Path <code class=\"i\">res://jugador/jugador.gd</code>.",
+     sel:"Jugador",dlg:{kind:"script",inherits:"CharacterBody3D",path:"res://jugador/jugador.gd"},target:"dlg-Template",tag:"Object: Empty",also:["dlg-Path"]},
+    {say:"Guardá con <kbd>Ctrl</kbd>+<kbd>S</kbd> como <code class=\"i\">jugador/jugador.tscn</code>. Ese es tu jugador: después lo metés en cada nivel.",
+     tree:TJ("scr"),dlg:{kind:"save",path:"res://jugador/",files:[".."],file:"jugador.tscn"},target:"dlg-file",tag:"jugador.tscn",also:["dlg-ok"]}
+  ]},
+  3:{titulo:"Dónde va esta línea",despues:true,pasos:[
+    {say:"Es la <b>primera línea</b> de <code class=\"i\">jugador.gd</code>. Si en Attach Script dejaste Inherits en CharacterBody3D, Godot ya la escribe solo.",
+     ...JSCR,code:"extends CharacterBody3D\n\n",hiLines:[1],target:"line-1",tag:"Línea 1"}
+  ]}
+ },
+ f2:{
+  0:{titulo:"Crear las acciones en el Mapa de entrada",pasos:[
+    {say:"Arriba: menú <b>Project</b> → <b>Project Settings...</b>.",
+     ...JST,tree:TJ("scr"),sel:"Jugador",menu:{name:"Project"},target:"mi-Project Settings...",tag:"Project Settings"},
+    {say:"Arriba de la ventana, pestaña <b>Input Map</b>. En el campo <b>Add New Action</b> escribí <code class=\"i\">adelante</code> y tocá <b>+ Add</b>.",
+     dlg:{kind:"settings",newAction:"adelante",actions:[]},target:"dlg-newaction",tag:"Nombre de la acción",also:["dlg-addaction","set-tab-Input Map"]},
+    {say:"La acción aparece en la lista. Tocá el <b>+</b> de su fila para asignarle una tecla.",
+     dlg:{kind:"settings",actions:[["adelante",[]]]},target:"act-adelante-add",tag:"Asignar tecla"},
+    {say:"Se abre una ventana que dice <i>Listening for Input...</i>: <b>apretá la tecla W</b> en tu teclado y tocá <b>OK</b>. Para el joystick, apretá el stick o elegilo en <b>Joypad Axes</b>.",
+     dlg:{kind:"settings",actions:[["adelante",[]]]},dlg2:{kind:"event",action:"adelante",got:"W (Physical)"},target:"dlg-listen",tag:"Apretá W",also:["dlg-ok"]},
+    {say:"Repetí para todas: <b>atras</b> (S), <b>izquierda</b> (A), <b>derecha</b> (D), <b>saltar</b> (Espacio), <b>correr</b> (Shift), <b>agacharse</b> (C), <b>disparar</b> (clic izquierdo). Escribilas igual, en minúscula y sin tildes.",
+     dlg:{kind:"settings",actions:ACC},target:"act-saltar",tag:"Todas las acciones",also:["dlg-close"]}
+  ]},
+  2:{titulo:"Dónde está esta línea",despues:true,pasos:[
+    {say:"En <code class=\"i\">jugador.gd</code>, dentro de <code class=\"i\">_physics_process</code>. Los cuatro nombres tienen que ser idénticos a los del Input Map.",
+     ...JSCR,hiLines:[jl("get_vector")],target:"line-"+jl("get_vector"),tag:"Los nombres del Input Map"}
+  ]}
+ },
+ f3:{
+  0:{titulo:"Dónde va cada parte en jugador.gd",pasos:[
+    {say:"Arriba, junto a las otras variables, va la sensibilidad con <code class=\"i\">@export</code>, para poder ajustarla desde el Inspector.",
+     ...JSCR,hiLines:[jl("sensibilidad :=")],target:"line-"+jl("sensibilidad :="),tag:"Sensibilidad"},
+    {say:"En <code class=\"i\">_ready</code> se captura el mouse: el cursor desaparece y queda encerrado en la ventana del juego.",
+     hiLines:[jl("func _ready"),jl("func _ready")+1],target:"line-"+(jl("func _ready")+1),tag:"Capturar el mouse"},
+    {say:"En <code class=\"i\">_unhandled_input</code>: <code class=\"i\">rotate_y</code> gira el cuerpo, <code class=\"i\">cabeza.rotate_x</code> la cabeza, y <code class=\"i\">clamp</code> pone el límite.",
+     hiLines:[15,16,17],target:"line-15",tag:"Los dos giros",also:["line-17"]},
+    {say:"Para probar la sensibilidad sin tocar el código: abrí la pestaña <b>3D</b>, seleccioná <b>Jugador</b> y cambiá <b>Sensibilidad</b> arriba del Inspector.",
+     ws:"3d",exports:JEXP,target:"prop-Sensibilidad",tag:"Ajustala acá"}
+  ]},
+  4:{titulo:"Dónde está esta línea",despues:true,pasos:[
+    {say:"En <code class=\"i\">_unhandled_input</code>, justo después de girar la cabeza.",
+     ...JSCR,hiLines:[jl("clamp(")],target:"line-"+jl("clamp("),tag:"Acá"}
+  ]}
+ },
+ f4:{
+  0:{titulo:"Dónde va el movimiento",pasos:[
+    {say:"Al final de <code class=\"i\">_physics_process</code> en <code class=\"i\">jugador.gd</code>. Va en <i>physics</i> y no en <code class=\"i\">_process</code> porque mueve un cuerpo que choca.",
+     ...JSCR,hiLines:[38,39,40,41,42],target:"line-39",tag:"Caminar hacia donde mirás",also:["line-42"]},
+    {say:"<b>Truco:</b> en la escena del jugador, el lado hacia donde mira es la <span style=\"color:#7aa8ff\">flecha azul (Z) pero al revés</span>: en Godot, adelante es -Z. Fijate que la cámara mire para ese lado.",
+     ws:"3d",sel:"Jugador",tool:"move",target:"gizmo",tag:"Adelante = -Z"}
+  ]},
+  3:{titulo:"Dónde está esta línea",despues:true,pasos:[
+    {say:"Última línea de <code class=\"i\">_physics_process</code>: primero calculás la velocity y al final la aplicás.",
+     ...JSCR,hiLines:[42],target:"line-42",tag:"Acá"}
+  ]}
+ },
+ f5:{
+  0:{titulo:"Dónde va saltar, correr y agacharse",pasos:[
+    {say:"El salto va arriba en <code class=\"i\">_physics_process</code>, después de la gravedad.",
+     ...JSCR,hiLines:[26,27],target:"line-26",tag:"Saltar"},
+    {say:"Después se elige la velocidad: normal, correr o agachado. Acá también baja la cabeza con <code class=\"i\">lerp</code>.",
+     hiLines:[29,30,31,32,33,34,35,36],target:"line-34",tag:"Correr y agacharse"},
+    {say:"Las velocidades y la fuerza del salto son <code class=\"i\">@export</code>: en <b>3D</b>, con Jugador seleccionado, las cambiás arriba del Inspector mientras probás.",
+     ws:"3d",exports:JEXP,target:"prop-Fuerza Salto",tag:"Ajustá el salto",also:["prop-Velocidad Correr"]}
+  ]},
+  3:{titulo:"Dónde está esta línea",despues:true,pasos:[
+    {say:"En <code class=\"i\">_physics_process</code>, después de <code class=\"i\">var vel_actual := velocidad</code>.",
+     ...JSCR,hiLines:[30],target:"line-30",tag:"Acá"}
+  ]}
+ },
+ f6:{
+  0:{titulo:"Dónde va soltar el mouse",pasos:[
+    {say:"Al final de <code class=\"i\">_unhandled_input</code>. <code class=\"i\">ui_cancel</code> ya existe en el Input Map (es Esc): no hace falta crearla.",
+     ...JSCR,hiLines:[18,19,20,21],target:"line-18",tag:"Esc suelta el mouse"}
+  ]},
+  2:{titulo:"Armar un nivel de prueba",pasos:[
+    {say:"<b>Scene → New Scene</b> → <b>3D Scene</b>, llamala <b>Prueba</b>. Agregá un <code class=\"i\">StaticBody3D</code> <b>Piso</b>: es un cuerpo que no se mueve.",
+     project:"Mi FPS",ws:"3d",tab:"prueba",fs:JFS,alias:{Piso:"PisoNivel",ColisionPiso:"PisoColision",DirectionalLight3D:"Sol",Jugador:"JugInst"},tree:[["Prueba","Node3D",0],["Piso","StaticBody3D",1]],sel:"Piso",target:"node-Piso",tag:"StaticBody3D"},
+    {say:"Dentro de Piso: un <code class=\"i\">CollisionShape3D</code> (<b>ColisionPiso</b>, New BoxShape3D grande y finito) y un <code class=\"i\">MeshInstance3D</code> con BoxMesh del mismo tamaño para verlo.",
+     tree:[["Prueba","Node3D",0],["Piso","StaticBody3D",1],["ColisionPiso","CollisionShape3D",2],["Malla","MeshInstance3D",2]],vals:{ColisionPiso:{Shape:"BoxShape3D"}},sel:"ColisionPiso",expand:{Shape:[["Size","20  0.2  20"]]},target:"prop-Size",tag:"Piso de 20 × 20",also:["v-ColisionPiso"]},
+    {say:"Agregá una <code class=\"i\">DirectionalLight3D</code> para que no quede todo oscuro.",
+     expand:null,tree:[["Prueba","Node3D",0],["Piso","StaticBody3D",1],["ColisionPiso","CollisionShape3D",2],["Malla","MeshInstance3D",2],["DirectionalLight3D","DirectionalLight3D",1]],sel:"DirectionalLight3D",target:"v-DirectionalLight3D",tag:"El sol"},
+    {say:"Seleccioná <b>Prueba</b> y tocá la <b>cadenita</b> (Instantiate Child Scene). Elegí <code class=\"i\">jugador/jugador.tscn</code>.",
+     sel:"Prueba",dlg:{kind:"instance",search:"jugador",files:["res://jugador/jugador.tscn"],pick:"res://jugador/jugador.tscn"},target:"dlg-file-res://jugador/jugador.tscn",tag:"jugador.tscn",also:["dlg-ok"]},
+    {say:"El jugador aparece con la cadenita al lado. Subilo un poco con Move para que no arranque metido en el piso, guardá y apretá <kbd>F6</kbd>.",
+     tree:[["Prueba","Node3D",0],["Piso","StaticBody3D",1],["ColisionPiso","CollisionShape3D",2],["Malla","MeshInstance3D",2],["DirectionalLight3D","DirectionalLight3D",1],["Jugador","CharacterBody3D",1,"inst scr"]],sel:"Jugador",tool:"move",target:"run-scene",tag:"F6 para jugar",also:["instic-Jugador"]}
+  ]}
+ }
+});
