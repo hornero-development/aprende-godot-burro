@@ -465,3 +465,129 @@ Object.assign(GUIAS,{
   ]}
  }
 });
+
+/* =================== UNIDAD 3: ARMAS Y DISPARO =================== */
+const AG=ARMA_COMPLETA_GD,al=t=>lineOf(AG,t);
+const TA=(o={})=>[["Jugador","CharacterBody3D",0,"scr"],["CollisionShape3D","CollisionShape3D",1],["Cuerpo","MeshInstance3D",1],["Cabeza","Node3D",1],["Camera3D","Camera3D",2],
+  ["RayCast3D","RayCast3D",3],["Arma","Node3D",3,o.arma||""],["Modelo","MeshInstance3D",4],["Fogonazo","OmniLight3D",4,o.fog===undefined?"hid":o.fog],["SonidoDisparo","AudioStreamPlayer3D",4],["Animaciones","AnimationPlayer",4]];
+const ALA={...ALJ,Cuerpo:"__none",RayCast3D:"Rayo",Arma:"ArmaPunto",Modelo:"ArmaModelo",Fogonazo:"Fogonazo",SonidoDisparo:"Sonido"};
+const AV={...JV,Modelo:{Mesh:"BoxMesh"},RayCast3D:{"Target Position":"0  0  -50"},Arma:{Position:"0.3  -0.25  -0.5"}};
+const AFS=[["folder","jugador",1],["tscn","jugador.tscn",2],["gd","jugador.gd",2],["gd","arma.gd",2],["folder","sonidos",1],["svg","disparo.wav",2],["folder","niveles",1],["tscn","prueba.tscn",2],["tscn","diana.tscn",2],["gd","diana.gd",2]];
+const AST={project:"Mi FPS",tab:"jugador",ws:"3d",alias:ALA,vals:AV,fs:AFS};
+const ASCR={...AST,ws:"script",scriptName:"arma.gd",tree:TA({arma:"scr"}),sel:"Arma",code:AG};
+const AEXP={Arma:{script:"arma.gd",vars:[["Danio","34"],["Alcance","50"],["Tiempo Entre Disparos","0.12"],["Automatico","on"],["Tamanio Cargador","30"],["Tiempo Recarga","1.5"],["Retroceso","0.03"],["Recuperacion","8"]]}};
+const ACC2=[...ACC,["recargar",["R (Physical)"]]];
+const TD=(f="")=>[["Diana","StaticBody3D",0,f],["CollisionShape3D","CollisionShape3D",1],["Modelo","MeshInstance3D",1]];
+const DST={project:"Mi FPS",tab:"diana",ws:"3d",alias:{Diana:"JugRoot",CollisionShape3D:"DianaCol",Modelo:"Diana"},vals:{CollisionShape3D:{Shape:"BoxShape3D"},Modelo:{Mesh:"CylinderMesh"}},fs:AFS};
+
+Object.assign(GUIAS,{
+ a1:{
+  0:{titulo:"Ponerle el arma al jugador",pasos:[
+    {say:"Abrí <code class=\"i\">jugador.tscn</code> (doble clic en FileSystem). Seleccioná <b>Camera3D</b> (la que está adentro de Cabeza) y tocá <b>+</b>.",
+     ...AST,tree:TJ("scr"),sel:"Camera3D",fsSel:"jugador.tscn",alias:{...ALA},target:"add",tag:"Add Child Node (+)",also:["node-Camera3D"]},
+    {say:"Buscá <code class=\"i\">RayCast3D</code> y tocá <b>Create</b>. Es el rayo invisible que hace de bala.",
+     dlg:{kind:"newnode",search:"RayCast3D",matches:[["RayCast3D","RayCast3D"],["ShapeCast3D","RayCast3D"]],pick:"RayCast3D",desc:"A ray in 3D space, used to find the first collision object it intersects."},target:"dlg-item-RayCast3D",tag:"RayCast3D",also:["dlg-ok"]},
+    {say:"Mirá la flecha roja: por defecto el rayo apunta <b>para abajo</b>, al piso. Así no sirve para disparar.",
+     tree:[...TJ("scr"),["RayCast3D","RayCast3D",3]],sel:"RayCast3D",alias:{...ALA,RayCast3D:"RayoAbajo"},vals:{RayCast3D:{"Target Position":"0  -1  0"}},target:"v-RayCast3D",tag:"Apunta al piso"},
+    {say:"En el Inspector, <b>Target Position</b>: poné <b>x</b> = 0, <b>y</b> = 0, <b>z</b> = <code class=\"i\">-50</code>. Ahora apunta 50 metros hacia adelante (en Godot, adelante es Z negativo).",
+     alias:ALA,vals:{RayCast3D:{"Target Position":"0  0  -50"}},target:"prop-Target Position",tag:"0 · 0 · -50",also:["v-RayCast3D"]},
+    {say:"De nuevo desde <b>Camera3D</b>: <b>+</b> → <code class=\"i\">Node3D</code> llamado <b>Arma</b>. Con Move ubicalo abajo a la derecha de la cámara: Position más o menos <code class=\"i\">0.3, -0.25, -0.5</code>.",
+     tree:[...TJ("scr"),["RayCast3D","RayCast3D",3],["Arma","Node3D",3]],sel:"Arma",tool:"move",target:"prop-Position",tag:"Abajo a la derecha",also:["v-Arma"]},
+    {say:"Dentro de <b>Arma</b>: un <code class=\"i\">MeshInstance3D</code> <b>Modelo</b> (por ahora una caja, después tu modelo), un <code class=\"i\">OmniLight3D</code> <b>Fogonazo</b>, un <code class=\"i\">AudioStreamPlayer3D</code> <b>SonidoDisparo</b> y un <code class=\"i\">AnimationPlayer</code> <b>Animaciones</b>.",
+     tool:"select",tree:TA({fog:""}),sel:"Modelo",target:"node-Modelo",tag:"Hijos de Arma",also:["node-Animaciones"]},
+    {say:"El fogonazo arranca apagado: tocá el <b>ojito</b> de <b>Fogonazo</b>. El script lo prende un instante en cada tiro.",
+     sel:"Fogonazo",target:"eye-Fogonazo",tag:"Ocultar"},
+    {say:"Seleccioná <b>SonidoDisparo</b> y arrastrá tu archivo de sonido desde FileSystem hasta <b>Stream</b> en el Inspector.",
+     tree:TA(),sel:"SonidoDisparo",vals:{SonidoDisparo:{Stream:"disparo.wav"}},fsSel:"disparo.wav",target:"prop-Stream",tag:"Soltá el sonido acá",also:["fs-disparo.wav"]},
+    {say:"Para ver si el arma queda bien en pantalla: seleccioná <b>Camera3D</b> y tildá <b>Preview</b>. Movés el Arma hasta que se vea como en un FPS.",
+     sel:"Camera3D",target:"preview",tag:"Preview"},
+    {say:"Por último seleccioná <b>Arma</b> y <b>Attach Script</b> → <code class=\"i\">res://jugador/arma.gd</code> (Inherits Node3D). Ahí va el código de las próximas lecciones.",
+     sel:"Arma",dlg:{kind:"script",inherits:"Node3D",path:"res://jugador/arma.gd"},target:"dlg-Path",tag:"arma.gd",also:["dlg-ok"]}
+  ]},
+  2:{titulo:"Dónde se cambia esto sin código",despues:true,pasos:[
+    {say:"Es la misma <b>Target Position</b> del RayCast3D en el Inspector. En el script se escribe en <code class=\"i\">_ready</code> para que dependa del <b>alcance</b> del arma.",
+     ...AST,tree:TA({arma:"scr"}),sel:"RayCast3D",target:"prop-Target Position",tag:"z = -50"},
+    {say:"Y esta es la línea en <code class=\"i\">arma.gd</code>:",
+     ws:"script",scriptName:"arma.gd",code:AG,sel:"Arma",hiLines:[al("rayo.target_position")],target:"line-"+al("rayo.target_position"),tag:"Acá"}
+  ]}
+ },
+ a2:{
+  0:{titulo:"Dónde va el disparo en arma.gd",pasos:[
+    {say:"Arriba del script, <code class=\"i\">$\"../RayCast3D\"</code> busca el rayo: <b>..</b> quiere decir \"subí al padre\" (Camera3D) y ahí buscá RayCast3D. Por eso el rayo y el Arma tienen que ser hermanos.",
+     ...ASCR,hiLines:[al("$\"../RayCast3D\"")],target:"line-"+al("$\"../RayCast3D\""),tag:"Busca el rayo"},
+    {say:"En el árbol se ve por qué: <b>RayCast3D</b> y <b>Arma</b> cuelgan los dos de Camera3D.",
+     ws:"3d",target:"node-RayCast3D",tag:"Hermanos",also:["node-Arma"]},
+    {say:"El disparo en sí está en <code class=\"i\">disparar()</code>: actualiza el rayo, pregunta si tocó algo y le avisa al objetivo.",
+     ws:"script",hiLines:[al("force_raycast_update"),al("is_colliding"),al("get_collider"),al("has_method"),al("objetivo.recibir_danio")],target:"line-"+al("is_colliding"),tag:"Preguntarle al rayo"}
+  ]},
+  3:{titulo:"Dónde está esta línea",despues:true,pasos:[
+    {say:"En <code class=\"i\">disparar()</code>, adentro del <code class=\"i\">if rayo.is_colliding():</code>.",
+     ...ASCR,hiLines:[al("get_collider")],target:"line-"+al("get_collider"),tag:"Acá"}
+  ]}
+ },
+ a3:{
+  0:{titulo:"Dónde se elige la cadencia",pasos:[
+    {say:"En <code class=\"i\">_process</code> se decide si quiere disparar: mantener apretado (automático) o un clic por tiro (semiautomático).",
+     ...ASCR,hiLines:[al("var quiere"),al("if quiere and")],target:"line-"+al("var quiere"),tag:"Automático o no"},
+    {say:"Al final de <code class=\"i\">disparar()</code> está la espera entre tiros.",
+     hiLines:[al("puede_disparar = false"),al("create_timer(tiempo_entre_disparos)"),al("puede_disparar = true\n")||al("	puede_disparar = true")],target:"line-"+al("create_timer(tiempo_entre_disparos)"),tag:"La espera"},
+    {say:"No hace falta tocar el código para cambiar de arma: en <b>3D</b>, seleccioná <b>Arma</b> y arriba del Inspector destildá <b>Automatico</b> o cambiá <b>Tiempo Entre Disparos</b>.",
+     ws:"3d",exports:AEXP,target:"prop-Automatico",tag:"Automático o pistola",also:["prop-Tiempo Entre Disparos"]}
+  ]},
+  3:{titulo:"Dónde está esta línea",despues:true,pasos:[
+    {say:"En <code class=\"i\">disparar()</code>, entre <code class=\"i\">puede_disparar = false</code> y <code class=\"i\">puede_disparar = true</code>.",
+     ...ASCR,hiLines:[al("create_timer(tiempo_entre_disparos)")],target:"line-"+al("create_timer(tiempo_entre_disparos)"),tag:"Acá"}
+  ]}
+ },
+ a4:{
+  0:{titulo:"Recargar: la tecla y el código",pasos:[
+    {say:"Falta la acción <b>recargar</b>: <b>Project → Project Settings → Input Map</b>, escribí <code class=\"i\">recargar</code>, <b>+ Add</b>, y asignale la <b>R</b>.",
+     ...AST,tree:TA({arma:"scr"}),sel:"Arma",dlg:{kind:"settings",newAction:"recargar",actions:ACC},target:"dlg-newaction",tag:"recargar",also:["dlg-addaction"]},
+    {say:"Así queda, con R asignada.",
+     dlg:{kind:"settings",actions:ACC2},target:"ev-recargar-R (Physical)",tag:"R"},
+    {say:"En <code class=\"i\">arma.gd</code>: el cargador se llena en <code class=\"i\">_ready</code> y la señal avisa al HUD cuántas balas hay.",
+     ws:"script",scriptName:"arma.gd",code:AG,hiLines:[al("signal municion_cambiada"),al("en_cargador = tamanio_cargador")],target:"line-"+al("en_cargador = tamanio_cargador"),tag:"Llenar el cargador",also:["line-"+al("signal municion_cambiada")]},
+    {say:"Toda la recarga está en <code class=\"i\">recargar()</code>, al final del script.",
+     hiLines:[al("func recargar"),al("var cargar :="),al("en_cargador += cargar"),al("reserva -= cargar")],target:"line-"+al("var cargar :="),tag:"La cuenta"},
+    {say:"El tamaño del cargador y el tiempo de recarga se ajustan desde el Inspector del <b>Arma</b>.",
+     ws:"3d",exports:AEXP,target:"prop-Tamanio Cargador",tag:"Balas por cargador",also:["prop-Tiempo Recarga"]}
+  ]}
+ },
+ a5:{
+  0:{titulo:"Retroceso y fogonazo en el editor",pasos:[
+    {say:"El retroceso se aplica en <code class=\"i\">_process</code>: <code class=\"i\">lerp</code> baja la patada y se la pone a la <b>cámara</b>.",
+     ...ASCR,hiLines:[al("patada = lerp"),al("camara.rotation.x")],target:"line-"+al("camara.rotation.x"),tag:"Sobre la cámara"},
+    {say:"Por eso <code class=\"i\">camara</code> es <code class=\"i\">get_parent()</code>: el padre de Arma es Camera3D, no Cabeza. Así no pisa lo que hace el mouse.",
+     hiLines:[al("get_parent()")],target:"line-"+al("get_parent()"),tag:"El padre de Arma"},
+    {say:"Para ajustar el fogonazo, prendelo un momento con el <b>ojito</b> y en el Inspector poné <b>Color</b> naranja, <b>Energy</b> alto (3) y <b>Range</b> chico (2). Después volvé a apagarlo.",
+     ws:"3d",tree:TA({arma:"scr",fog:""}),sel:"Fogonazo",vals:{Fogonazo:{Color:"color:#ffb35a",Energy:"3",Range:"2"}},target:"prop-Energy",tag:"Energy alto",also:["eye-Fogonazo","v-Fogonazo"]},
+    {say:"Retroceso y Recuperacion también son <code class=\"i\">@export</code>: los probás desde el Inspector del <b>Arma</b>.",
+     tree:TA({arma:"scr"}),sel:"Arma",exports:AEXP,target:"prop-Retroceso",tag:"Cuánto patea",also:["prop-Recuperacion"]}
+  ]}
+ },
+ a6:{
+  0:{titulo:"Hacer una diana",pasos:[
+    {say:"<b>Scene → New Scene</b> → <b>Other Node</b> → <code class=\"i\">StaticBody3D</code>. Renombralo <b>Diana</b>.",
+     ...DST,tab:"[unsaved]",tree:[["Diana","StaticBody3D",0]],sel:"Diana",rename:"Diana",target:"node-Diana",tag:"StaticBody3D"},
+    {say:"Agregale un <code class=\"i\">CollisionShape3D</code> (New BoxShape3D, del tamaño de la diana) y un <code class=\"i\">MeshInstance3D</code> <b>Modelo</b> (New CylinderMesh finito, de frente). Sin colisión, el rayo la atraviesa.",
+     tree:TD(),sel:"CollisionShape3D",target:"v-CollisionShape3D",tag:"Lo que toca el rayo",also:["node-CollisionShape3D"]},
+    {say:"Seleccioná <b>Diana</b>, <b>Attach Script</b> → <code class=\"i\">res://niveles/diana.gd</code> (Inherits StaticBody3D) y escribí el código de la lección.",
+     sel:"Diana",dlg:{kind:"script",inherits:"StaticBody3D",path:"res://niveles/diana.gd"},target:"dlg-Path",tag:"diana.gd",also:["dlg-ok"]},
+    {say:"Para contarlas después, poné la diana en el grupo <code class=\"i\">enemigos</code>: pestaña <b>Groups</b>, <b>+</b>, escribí el nombre.",
+     tree:TD("scr"),dock:"grp",groups:{Diana:["enemigos"]},target:"grp-enemigos",tag:"Grupo enemigos",also:["grp-add"]},
+    {say:"La <b>Vida</b> es <code class=\"i\">@export</code>: aparece en el Inspector y cada diana puede tener distinta.",
+     dock:"insp",exports:{Diana:{script:"diana.gd",vars:[["Vida","100"]]}},target:"prop-Vida",tag:"Vida"},
+    {say:"Guardala como <code class=\"i\">niveles/diana.tscn</code>. Abrí <code class=\"i\">prueba.tscn</code> e instanciala varias veces con la <b>cadenita</b>.",
+     tab:"prueba",tree:[["Prueba","Node3D",0],["Piso","StaticBody3D",1],["ColisionPiso","CollisionShape3D",2],["DirectionalLight3D","DirectionalLight3D",1],["Jugador","CharacterBody3D",1,"inst scr"],["Diana","StaticBody3D",1,"inst scr"]],
+     alias:{Piso:"PisoNivel",ColisionPiso:"PisoColision",DirectionalLight3D:"Sol",Jugador:"JugInst",Diana:"Diana"},vals:{ColisionPiso:{Shape:"BoxShape3D"}},sel:"Prueba",exports:null,target:"link-inst",tag:"Instanciar diana",also:["instic-Diana"]}
+  ]},
+  3:{titulo:"Dónde va el arma completa",pasos:[
+    {say:"Todo este script va en <code class=\"i\">arma.gd</code>, el del nodo <b>Arma</b> que está adentro de Camera3D. Reemplazá lo que tenías por esto.",
+     ...ASCR,hiLines:[1],target:"script-file",tag:"arma.gd",also:["scric-Arma"]},
+    {say:"Antes de jugar, revisá que existan <b>disparar</b> y <b>recargar</b> en <b>Project → Project Settings → Input Map</b>.",
+     dlg:{kind:"settings",actions:ACC2},target:"act-disparar",tag:"disparar",also:["act-recargar"]},
+    {say:"Si el rayo no toca nada, activá <b>Debug → Visible Collision Shapes</b> y jugá con <kbd>F6</kbd>: vas a ver en celeste todas las colisiones.",
+     ws:"3d",menu:{name:"Debug"},target:"mi-☐ Visible Collision Shapes",tag:"Ver colisiones",also:["menu-Debug"]}
+  ]}
+ }
+});

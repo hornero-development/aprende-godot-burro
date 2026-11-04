@@ -5,6 +5,7 @@ const GG_W=1100,GG_H=640;
 
 const GG_SCENE_MENU=[["New Scene","Ctrl+N"],["New Inherited Scene...","Ctrl+Shift+N"],["Open Scene...","Ctrl+O"],["Reopen Closed Scene","Ctrl+Shift+T"],["Open Recent",""],"-",
   ["Save Scene","Ctrl+S"],["Save Scene As...","Ctrl+Shift+S"],["Save All Scenes","Ctrl+Shift+Alt+S"],"-",["Quick Open...","Shift+Alt+O"],"-",["Close Scene","Ctrl+Shift+W"],["Quit","Ctrl+Q"]];
+const GG_DEBUG_MENU=[["Deploy with Remote Debug",""],["Small Deploy with Network Filesystem",""],"-",["☐ Visible Collision Shapes",""],["☐ Visible Paths",""],["☐ Visible Navigation",""],["☐ Visible Avoidance",""],"-",["Debug CanvasItem Redraws",""],["Synchronize Script Changes",""],["Synchronize Scene Changes",""],"-",["Keep Debug Server Open",""],["Customize Run Instances...",""]];
 const GG_PROJECT_MENU=[["Project Settings...",""],["Version Control",""],"-",["Export...",""],["Install Android Build Template...",""],"-",["Open User Data Folder",""],["Reload Current Project",""],["Quit to Project List","Ctrl+Shift+Q"]];
 
 /* propiedades que muestra el Inspector según el tipo de nodo */
@@ -32,7 +33,7 @@ Object.assign(GG_PROPS,{
  CanvasLayer:[["#CanvasLayer"],["Layer","1"],["Visible","on"],["Offset","0  0"]],
  PanelContainer:[["#Control"],["@Layout"],["Layout Mode","Anchors"],["Anchors Preset","Top Left"],["@Visibility"],["Visible","on"]]
 });
-[["CharacterBody3D","3d","El cuerpo del jugador."],["DirectionalLight3D","3d","Luz como el sol."],["GPUParticles3D","3d","Partículas."],["StaticBody3D","3d","Cuerpo quieto."]].forEach(([n,c,d])=>{if(typeof TYPES!=="undefined"&&!TYPES[n])TYPES[n]={c,d}});
+[["RayCast3D","3d","Un rayo que detecta lo que toca."],["AudioStreamPlayer3D","3d","Sonido con posición en el espacio."],["CharacterBody3D","3d","El cuerpo del jugador."],["DirectionalLight3D","3d","Luz como el sol."],["GPUParticles3D","3d","Partículas."],["StaticBody3D","3d","Cuerpo quieto."]].forEach(([n,c,d])=>{if(typeof TYPES!=="undefined"&&!TYPES[n])TYPES[n]={c,d}});
 Object.assign(GG_PROPS,{
  HSlider:[["#Range"],["Min Value","0"],["Max Value","100"],["Step","1"],["Value","0"],["#Control"],["@Layout"],["Custom Minimum Size","0  0"]],
  CheckButton:[["#Button"],["Text",""],["#BaseButton"],["Button Pressed","off"],["Toggle Mode","on"],["#Control"],["@Layout"],["Custom Minimum Size","0  0"]],
@@ -40,6 +41,9 @@ Object.assign(GG_PROPS,{
  CharacterBody3D:[["#CharacterBody3D"],["Motion Mode","Grounded"],["Up Direction","0  1  0"],["@Floor"],["Max Angle","45"],["#Node3D"],...GG_T3D],
  DirectionalLight3D:[["#DirectionalLight3D"],["#Light3D"],["@Light"],["Color","color:#ffffff"],["Energy","1"],["@Shadow"],["Enabled","off"],["#Node3D"],...GG_T3D],
  GPUParticles3D:[["#GPUParticles3D"],["Emitting","on"],["Amount","8"],["@Drawing"],["Visibility AABB",".."],["Process Material","<empty>"],["@Draw Passes"],["Pass 1","<empty>"]],
+ RayCast3D:[["#RayCast3D"],["Enabled","on"],["Exclude Parent","on"],["Target Position","0  -1  0"],["Collision Mask","1"],["Hit From Inside","off"],["#Node3D"],...GG_T3D],
+ AudioStreamPlayer3D:[["#AudioStreamPlayer3D"],["Stream","<empty>"],["Volume dB","0"],["Unit Size","10"],["Autoplay","off"],["Max Distance","0"],["Bus","Master"],["#Node3D"],...GG_T3D],
+ AnimationPlayer:[["#AnimationPlayer"],["Current Animation","[stop]"],["Autoplay on Load","[stop]"],["#AnimationMixer"],["Active","on"],["Root Node",".."]],
  StaticBody3D:[["#StaticBody3D"],["Physics Material Override","<empty>"],["#CollisionObject3D"],["@Collision"],["Layer","1"],["#Node3D"],...GG_T3D]
 });
 const GG_SIGNALS={
@@ -160,6 +164,14 @@ const GG_3D={
  PisoNivel:{c:[280,300],d:'<path d="M20 340 L540 340 L440 230 L120 230 Z" fill="#6d7a62" stroke="#8a9a7c"/>'},
  PisoColision:{c:[280,300],d:'<path d="M20 340 L540 340 L440 230 L120 230 Z" fill="none" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="6 3"/>'},
  JugInst:{c:[280,250],d:'<rect x="262" y="190" width="36" height="110" rx="18" fill="rgba(90,200,255,.12)" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="5 3"/><path d="M272 206 L288 206 L288 198 L272 198 Z" fill="#7d55b5"/>'},
+ RayoAbajo:{c:[280,200],d:'<path d="M280 180 V232" stroke="#ff6b6b" stroke-width="2.5" stroke-dasharray="5 3"/><path d="M274 228 l6 10 l6 -10z" fill="#ff6b6b"/>'},
+ Rayo:{c:[350,150],d:'<path d="M282 176 L452 116" stroke="#ff6b6b" stroke-width="2.5" stroke-dasharray="6 3"/><path d="M448 108 l14 4 l-10 10z" fill="#ff6b6b"/><text x="458" y="104" fill="#ff8a8a" font-size="12" font-family="JetBrains Mono,monospace">-Z · 50 m</text>'},
+ ArmaModelo:{c:[312,196],d:'<path d="M296 190 L336 188 L336 198 L314 200 L310 212 L302 212 L304 200 L296 199 Z" fill="#3b4048" stroke="#9aa1ab"/>'},
+ ArmaPunto:{c:[312,196],d:'<g stroke-width="2"><path d="M312 196 h12" stroke="#f05a5a"/><path d="M312 196 v-12" stroke="#7ad36a"/></g>'},
+ Fogonazo:{c:[340,192],d:'<circle cx="340" cy="192" r="6" fill="#ffd27a"/><circle cx="340" cy="192" r="16" fill="rgba(255,190,90,.3)"/>'},
+ Sonido:{c:[320,214],d:'<path d="M316 210 h4 l6 -5 v18 l-6 -5 h-4z" fill="#9fd0ff"/>'},
+ Diana:{c:[400,236],d:'<rect x="396" y="250" width="8" height="50" fill="#7a5a3a"/><circle cx="400" cy="236" r="28" fill="#f3f3f3"/><circle cx="400" cy="236" r="20" fill="#d33"/><circle cx="400" cy="236" r="12" fill="#f3f3f3"/><circle cx="400" cy="236" r="5" fill="#d33"/>'},
+ DianaCol:{c:[400,236],d:'<rect x="368" y="204" width="64" height="98" fill="none" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="5 3"/>'},
  JugRoot:{c:[280,322],d:'<circle cx="280" cy="322" r="3" fill="#fc7f7f"/>'},
  PinCollision:{c:[280,170],d:'<circle cx="280" cy="170" r="32" fill="none" stroke="#5ac8ff" stroke-width="1.5" stroke-dasharray="5 3"/>'}
 };
@@ -256,7 +268,7 @@ function ggDialog(d){
 
 function ggStage(st){
   const tabName=st.tab===undefined?null:st.tab;
-  const menu=st.menu?`<div class="gg-pop gg-drop" style="left:${st.menu.name==="Scene"?6:58}px">${(st.menu.name==="Scene"?GG_SCENE_MENU:GG_PROJECT_MENU).map(x=>x==="-"?"<hr>":`<div data-t="mi-${x[0]}"><span>${x[0]}</span><span class="gg-muted">${x[1]}</span></div>`).join("")}</div>`:"";
+  const menu=st.menu?`<div class="gg-pop gg-drop" style="left:${{Scene:6,Project:58,Debug:118,Editor:172}[st.menu.name]||6}px">${({Scene:GG_SCENE_MENU,Project:GG_PROJECT_MENU,Debug:GG_DEBUG_MENU}[st.menu.name]||GG_SCENE_MENU).map(x=>x==="-"?"<hr>":`<div data-t="mi-${x[0]}"><span>${x[0]}</span><span class="gg-muted">${x[1]}</span></div>`).join("")}</div>`:"";
   const center=st.ws==="script"?ggScript(st):st.ws==="3d"?ggView3D(st):ggCanvas(st);
   return `<div class="gg-title">${tabName?tabName+(tabName[0]==="["?"":".tscn")+" - ":""}${st.project||"Mi FPS"} - Godot Engine<span class="gg-sp"></span><span>—</span><span>▢</span><span>✕</span></div>
   <div class="gg-top">
