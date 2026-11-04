@@ -299,6 +299,7 @@ function startLesson(c,i){L={c,i,s:0,sel:null,checked:false,mistakes:0};setNav(N
 function renderStep(){
   stop3D();const les=COURSES[L.c].lessons[L.i],st=les.steps[L.s];
   L.sel=null;L.checked=!(st.type==="quiz"||st.type==="fill");
+  const gu=typeof guiaPara==="function"?guiaPara(les.id,L.s):null;
   const head=`<div class="kicker">${st.kicker}</div>`;
   let body="";
   if(st.type==="info"||st.type==="preview")body=`${head}<h2>${st.title}</h2>${st.html}${st.type==="preview"?'<div id="pvhost"></div>':""}`;
@@ -317,13 +318,14 @@ function renderStep(){
   app.innerHTML=`<div class="lesson">
     <div class="lhead"><button class="xbtn" id="quit" aria-label="Salir de la lección"><svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <div class="bar"><span style="width:${L.s/les.steps.length*100}%"></span></div></div>
-    <div class="step">${body}</div>
+    <div class="step">${body}${gu?'<div id="guiahost"></div>':""}</div>
     <div class="lfoot"><div class="fb" id="fb"></div><button class="btn" id="next" ${L.checked?"":"disabled"}>${L.checked?"Continuar":"Comprobar"}</button></div>
   </div>`;
   $("#quit").onclick=()=>FPS_COURSES.includes(L.c)?renderLessons():renderGDSChoice();
   if(st.type==="preview")mountPreview($("#pvhost"),{mode:st.mode,openOptions:st.openOptions});
   if(st.type==="lab")mountLab($("#labhost"),st.lab);
   if(st.type==="trace")runTrace(st);
+  if(gu&&!gu.despues)mountGuia($("#guiahost"),gu);
   if(st.type==="run")$("#runbtn").onclick=()=>{const out=$("#out");blip(520);
     out.innerHTML='<div class="h">--- Ejecutando escena ---</div>';
     st.out.forEach((line,k)=>setTimeout(()=>{const d=document.createElement("div");d.textContent=line;out.appendChild(d);blip(700+k*40)},300+k*260))};
@@ -339,6 +341,7 @@ function renderStep(){
     if(ok){fb.className="fb ok";fb.innerHTML=`¡Bien, burro sabio!<small>${esc(st.explain)}</small>`;nx.className="btn ok";blip(880)}
     else{L.mistakes++;fb.className="fb bad";fb.innerHTML=`No era esa. La correcta está marcada.<small>${esc(st.explain)}</small>`;nx.className="btn bad";blip(200)}
     nx.textContent="Continuar";
+    if(gu&&gu.despues)mountGuia($("#guiahost"),gu);
   };
 }
 function finish(){
